@@ -1,39 +1,38 @@
-https://docs.pollen-robotics.com/sdk/first-moves/kinematics/
+# Projet Imitation, Pole Projet Robotique P19, CentraleSupélec
 
-Projet Imitation
-Pole Projet Rbotique P19
-CentraleSupélec
+Date : Semestre 8 (2025)
 
-Contributeurs :
-Cheikh Rouhou Mohamed
-Maes Alexis
-Lafaury Marin
-Champaney Matéo
+Contributeurs (Semestre 7) :
+
+- Cheikh, Rouhou Mohamed
+- Maes, Alexis
+- Lafaury, Marin
+- Champaney, Matéo
+
+Contributeurs (Semestre 8) :
+
+- Lafaury, Marin
+- Oldensand, Victor
+- Ghandi, Hugo
+- TBD, Charlie
 
 Encadrants :
-Makarov Maria
-Tao Xavier
 
-Prise en main du projet:
-Pour pouvoir utiliser le robot et la vision par caméra de profondeur, nous avons mis en place un environnement virtuel python et installé diffèrentes librairies. Vous
-pouvez copier les lignes suivantes et les executer dans un terminal Bash :
-python -m venv env
+- Makarov, Maria
+- Tao, Xavier
 
-source env/Scripts/activate
+## Documentation
 
-pip3 install reachy-sdk
-git clone https://github.com/pollen-robotics/reachy-sdk
-pip3 install -e reachy-sdk
+https://docs.pollen-robotics.com/sdk/first-moves/kinematics/
 
-pip install numpy
-pip install time
-pip install math
-pip install mediapipe
-pip install cv2
-pip install scipy
-pip install pyrealsense2
-pip install random
-pip install os
+### Prise en main du projet
+
+Pour pouvoir utiliser le robot et la vision par caméra de profondeur, nous avons mis en place un environnement virtuel en utilisant [uv](https://docs.astral.sh/uv/). Vous
+pouvez copier les lignes suivantes et les executer pour préparer l'environnement virtuel vous-même.
+
+```bash
+uv sync
+```
 
 Organisation :
-Nous avons développer différents programme. Certains servent uniquement à se connecter au robot, d'autres servent uniquement à des expèriences de visions, d'autres encore combinent vision et controle
+Nous avons développé différents programmes. Certains servent uniquement à se connecter au robot, d'autres servent uniquement à des expèriences de visions, d'autres encore combinent vision et controle.
