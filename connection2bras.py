@@ -3,13 +3,9 @@
 from reachy_sdk import ReachySDK
 from reachy_sdk.trajectory import goto
 from reachy_sdk.trajectory.interpolation import InterpolationMode
-import numpy as np
-import time
-from scipy.spatial.transform import Rotation as R
-import numpy as np
 
 # Remplacez '192.168.X.X' par l'adresse IP de Reachy
-reachy = ReachySDK(host='138.195.196.90')
+reachy = ReachySDK(host="138.195.196.90")
 
 # Vérifiez si la connexion fonctionne
 # for name, joint in reachy.joints.items():
@@ -34,15 +30,15 @@ angled_position = {
 }
 
 
-reachy.turn_on('l_arm')
-reachy.turn_on('r_arm')
+reachy.turn_on("l_arm")
+reachy.turn_on("r_arm")
 
 goto(
     goal_positions=angled_position,
     duration=1.0,
-    interpolation_mode=InterpolationMode.MINIMUM_JERK
+    interpolation_mode=InterpolationMode.MINIMUM_JERK,
 )
 
 
-reachy.turn_off_smoothly('l_arm')
-reachy.turn_off_smoothly('r_arm')
+reachy.turn_off_smoothly("l_arm")
+reachy.turn_off_smoothly("r_arm")

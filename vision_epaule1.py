@@ -1,7 +1,6 @@
-'''Premier test d analyse des angles de l'épaule par caméra 3D'''
+"""Premier test d analyse des angles de l'épaule par caméra 3D"""
 
 import numpy as np
-import math
 import cv2
 import mediapipe as mp
 import pyrealsense2 as rs
@@ -39,15 +38,18 @@ def calcul_angles(r_shoulder, r_hip, r_elbow):
     d_shoulder_to_elbow = np.linalg.norm(vector_shoulder_to_elbow)
 
     # Calcul de l'angle entre les vecteurs (utilisation du produit scalaire)
-    cos_angle = np.dot(vector_shoulder_to_hip, vector_shoulder_to_elbow) / \
-        (d_shoulder_to_hip * d_shoulder_to_elbow)
+    cos_angle = np.dot(vector_shoulder_to_hip, vector_shoulder_to_elbow) / (
+        d_shoulder_to_hip * d_shoulder_to_elbow
+    )
     # L'angle entre le bras et l'avant-bras
     angle_between = np.arccos(np.clip(cos_angle, -1.0, 1.0))
 
     # Calcul du pitch et roll en utilisant la décomposition du vecteur 3D
     # Calcul du pitch (rotation autour de l'axe Y)
-    pitch = np.arctan2(vector_shoulder_to_hip[2], np.sqrt(
-        vector_shoulder_to_hip[0]**2 + vector_shoulder_to_hip[1]**2))
+    pitch = np.arctan2(
+        vector_shoulder_to_hip[2],
+        np.sqrt(vector_shoulder_to_hip[0] ** 2 + vector_shoulder_to_hip[1] ** 2),
+    )
 
     # Calcul du roll (rotation autour de l'axe Z)
     roll = np.arctan2(vector_shoulder_to_elbow[1], vector_shoulder_to_elbow[0])
@@ -66,8 +68,12 @@ def get_3d_coordinates(landmark):
     if 0 <= cx < depth_image.shape[1] and 0 <= cy < depth_image.shape[0]:
         depth = depth_frame.get_distance(cx, cy)
         if depth > 0:  # Assurez-vous que la profondeur est valide
-            intrinsics = pipeline.get_active_profile().get_stream(
-                rs.stream.depth).as_video_stream_profile().get_intrinsics()
+            intrinsics = (
+                pipeline.get_active_profile()
+                .get_stream(rs.stream.depth)
+                .as_video_stream_profile()
+                .get_intrinsics()
+            )
             fx, fy = intrinsics.fx, intrinsics.fy
             ppx, ppy = intrinsics.ppx, intrinsics.ppy
 
@@ -106,32 +112,47 @@ try:
 
             # Points pour le bras droit
             r_shoulder = get_3d_coordinates(
-                landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value])
+                landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
+            )
             r_elbow = get_3d_coordinates(
-                landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value])
-            r_hip = get_3d_coordinates(
-                landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value])
+                landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value]
+            )
+            r_hip = get_3d_coordinates(landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value])
 
             # Calcul des angles pour l'épaule droite
             r_shoulder_pitch, r_shoulder_roll = calcul_angles(
-                r_shoulder, r_hip, r_elbow)
+                r_shoulder, r_hip, r_elbow
+            )
 
             # Affichage des angles sur l'image
-            cv2.putText(color_image, f'Pitch: {int(r_shoulder_pitch)} deg',
-                        (10, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            cv2.putText(color_image, f'Roll: {int(r_shoulder_roll)} deg',
-                        (10, 80),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            cv2.putText(
+                color_image,
+                f"Pitch: {int(r_shoulder_pitch)} deg",
+                (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                2,
+            )
+            cv2.putText(
+                color_image,
+                f"Roll: {int(r_shoulder_roll)} deg",
+                (10, 80),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                2,
+            )
 
         # Dessiner les annotations pour le corps
         mp_draw.draw_landmarks(
-            color_image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+            color_image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS
+        )
 
         # Afficher l'image
-        cv2.imshow('RealSense Body Pose and Shoulder Angles', color_image)
+        cv2.imshow("RealSense Body Pose and Shoulder Angles", color_image)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
 finally:

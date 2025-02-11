@@ -1,4 +1,4 @@
-'''Calcul des angles articulaires en 3D'''
+"""Calcul des angles articulaires en 3D"""
 
 import cv2
 import mediapipe as mp
@@ -21,6 +21,7 @@ pipeline.start(config)
 # Aligner les flux couleur et profondeur
 align = rs.align(rs.stream.color)
 
+
 def calculate_angle_3d(point1, point2, point3):
     """
     Calculer l'angle entre trois points dans l'espace 3D.
@@ -30,24 +31,31 @@ def calculate_angle_3d(point1, point2, point3):
     :return: Angle en degrés
     """
     # Convertir les points en vecteurs
-    vector1 = np.array([point1[0] - point2[0], point1[1] - point2[1], point1[2] - point2[2]])
-    vector2 = np.array([point3[0] - point2[0], point3[1] - point2[1], point3[2] - point2[2]])
-    
+    vector1 = np.array(
+        [point1[0] - point2[0], point1[1] - point2[1], point1[2] - point2[2]]
+    )
+    vector2 = np.array(
+        [point3[0] - point2[0], point3[1] - point2[1], point3[2] - point2[2]]
+    )
+
     # Calculer le produit scalaire et les normes des vecteurs
     dot_product = np.dot(vector1, vector2)
     norm1 = np.linalg.norm(vector1)
     norm2 = np.linalg.norm(vector2)
-    
+
     # Éviter les divisions par zéro
     if norm1 == 0 or norm2 == 0:
         return 0
-    
+
     # Calcul de l'angle (cosinus) et conversion en degrés
     cosine_angle = dot_product / (norm1 * norm2)
-    cosine_angle = max(-1.0, min(1.0, cosine_angle))  # Limiter entre -1 et 1 pour éviter les erreurs numériques
+    cosine_angle = max(
+        -1.0, min(1.0, cosine_angle)
+    )  # Limiter entre -1 et 1 pour éviter les erreurs numériques
     angle_rad = math.acos(cosine_angle)
     angle_deg = math.degrees(angle_rad)
     return angle_deg
+
 
 def get_3d_coordinates(landmark):
     """
@@ -60,15 +68,21 @@ def get_3d_coordinates(landmark):
         depth = depth_frame.get_distance(cx, cy)  # Obtenir la profondeur (z)
         if depth > 0:  # Vérifier que la profondeur est valide
             # Récupérer les paramètres intrinsèques de la caméra
-            intrinsics = pipeline.get_active_profile().get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+            intrinsics = (
+                pipeline.get_active_profile()
+                .get_stream(rs.stream.depth)
+                .as_video_stream_profile()
+                .get_intrinsics()
+            )
             fx, fy = intrinsics.fx, intrinsics.fy
             ppx, ppy = intrinsics.ppx, intrinsics.ppy
-            
+
             # Convertir les coordonnées en mètres
             x = (cx - ppx) * depth / fx
             y = (cy - ppy) * depth / fy
             return [x, y, depth]
     return [0, 0, 0]  # Si les coordonnées ne sont pas valides
+
 
 try:
     while True:
@@ -94,24 +108,38 @@ try:
             h, w, c = color_image.shape  # Dimensions de l'image couleur
 
             # Points pour le bras droit
-            r_shoulder = get_3d_coordinates(landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value])
-            r_elbow = get_3d_coordinates(landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value])
-            r_wrist = get_3d_coordinates(landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value])
+            r_shoulder = get_3d_coordinates(
+                landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
+            )
+            r_elbow = get_3d_coordinates(
+                landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value]
+            )
+            r_wrist = get_3d_coordinates(
+                landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value]
+            )
 
             # Calculer l'angle du coude droit
             r_elbow_angle = calculate_angle_3d(r_shoulder, r_elbow, r_wrist)
 
             # Afficher l'angle sur l'image
-            cv2.putText(color_image, f'Elbow Angle: {int(r_elbow_angle)} deg', 
-                        (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            cv2.putText(
+                color_image,
+                f"Elbow Angle: {int(r_elbow_angle)} deg",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                2,
+            )
 
-        mp_draw.draw_landmarks(color_image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+        mp_draw.draw_landmarks(
+            color_image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS
+        )
 
-        cv2.imshow('RealSense Hands and Arms with 3D Angles', color_image)
+        cv2.imshow("RealSense Hands and Arms with 3D Angles", color_image)
 
         # Quitter la boucle si la touche 'q' est pressée
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
 finally:
