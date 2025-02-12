@@ -1,41 +1,25 @@
 """Outils pour construction et entrainement des réseaux neuronnaux"""
-import cv2
-import os
-import random
-import numpy as np
+
 import matplotlib.pyplot as plt
-import time
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset, TensorDataset, ConcatDataset, Subset
-from torchinfo import summary
-
-from torchvision import datasets, transforms
-import uuid
-import imageio
+from torchvision import transforms
 from PIL import Image
 
-import csv
-
-device = torch.device('cuda')
+device = torch.device("cuda")
 torch.cuda.empty_cache()
 torch.cuda.reset_max_memory_allocated()
 
 
 def conversion(dic):
-    return [dic['path'], dic['value']]
+    return [dic["path"], dic["value"]]
 
 
 def save_checkpoint(model, path):
     torch.save(model.state_dict(), path)
-    print('modele enregistré')
+    print("modele enregistré")
 
 
-transform = transforms.Compose(
-    [transforms.Resize((100, 100)), transforms.ToTensor()])
+transform = transforms.Compose([transforms.Resize((100, 100)), transforms.ToTensor()])
 
 
 def tensorisation(file_paths):
@@ -61,15 +45,15 @@ def train_step(batch, modele, optimizer, criterion):
     return loss.item()
 
 
-def train(data, EPOCH, modele,  optimizer, criterion, save_path):
+def train(data, EPOCH, modele, optimizer, criterion, save_path):
     for epoch in range(1, EPOCH + 1):
-        print('\n Epoch {}/{}'.format(epoch, EPOCH))
-        running_loss = .0
+        print("\n Epoch {}/{}".format(epoch, EPOCH))
+        running_loss = 0.0
         for idx, batch in enumerate(data):
             running_loss += train_step(batch, modele, optimizer, criterion)
         if epoch % 10 == 0:
             save_checkpoint(modele, save_path)
-        print(f'la loss de l\' epoch {epoch} vaut {running_loss}')
+        print(f"la loss de l' epoch {epoch} vaut {running_loss}")
 
 
 def test_model_with_accuracy(model, test_dataloader, criterion, device):
@@ -103,8 +87,7 @@ def test_model_with_accuracy(model, test_dataloader, criterion, device):
 
             # Affichage des résultats pour le batch courant
             print(f"\nBatch {batch_idx + 1}/{len(test_dataloader)}")
-            print(
-                f"Prédictions Correctes : {correct_predictions}/{labels.size(0)}")
+            print(f"Prédictions Correctes : {correct_predictions}/{labels.size(0)}")
 
     # Moyenne des pertes et précision totale
     avg_loss = total_loss / len(test_dataloader)
@@ -117,5 +100,5 @@ def test_model_with_accuracy(model, test_dataloader, criterion, device):
 def affiche_image(img):
     img = img.permute(1, 2, 0).numpy()
     plt.imshow(img)
-    plt.axis('off')
+    plt.axis("off")
     plt.show()
