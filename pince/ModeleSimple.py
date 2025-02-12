@@ -1,45 +1,24 @@
-"""Modèle de détection main ouverte ou fermé.
-Modèle le plus léger"""
+"""Modèle de détection main ouverte ou fermé. Modèle le plus léger"""
 
-import cv2
 import os
-import random
-import numpy as np
-import matplotlib.pyplot as plt
-import time
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset, TensorDataset, ConcatDataset, Subset
+from torch.utils.data import DataLoader, Subset
 from torchinfo import summary
-
-from torchvision import datasets, transforms
-import uuid
-import imageio
-from PIL import Image
-
+from torchvision import transforms
 import csv
-try:
-    from HandGestureUtils import *
-except:
-    pass
-
-try:
-    from PinceMain.HandGestureUtils import *
-except:
-    pass
+from HandGestureUtils import *
+from PinceMain.HandGestureUtils import *
 
 
 def former_dataset(liste_data, shuffle, cat):
     indices = torch.randperm(len(liste_data)).tolist()
     data = Subset(liste_data, indices)
     lentot = len(data)
-    sep = int(0.7*lentot)
+    sep = int(0.7 * lentot)
     liste_ind = torch.randperm(lentot)
     batch_size = 16
-    if cat == 'train':
+    if cat == "train":
         ind = liste_ind[:sep].tolist()
         data = Subset(data, ind)
         dataloader = DataLoader(data, batch_size=batch_size, shuffle=shuffle)
@@ -74,42 +53,39 @@ class HandModeleLite(nn.Module):
 
 data_path = "D:/ProjetReachy/DataMain/PhotoMain"
 output_csv = "D:/ProjetReachy/DataMain/label.csv"
-noms = ['path', 'value']
+noms = ["path", "value"]
 
-with open(output_csv, mode='r', encoding='utf-8') as file:
+with open(output_csv, mode="r", encoding="utf-8") as file:
     reader = csv.DictReader(file, fieldnames=noms)
     liste_data = list(map(conversion, reader))
 
-transform = transforms.Compose(
-    [transforms.Resize((100, 100)), transforms.ToTensor()])
+transform = transforms.Compose([transforms.Resize((100, 100)), transforms.ToTensor()])
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     modele = HandModeleLite().to(device)
     summary(modele, input_size=((128, 3, 100, 100)))
 
     # préparation des données
-    train_dataloader = former_dataset(liste_data, True, 'train')
-    test_dataloader = former_dataset(liste_data, False, 'test')
+    train_dataloader = former_dataset(liste_data, True, "train")
+    test_dataloader = former_dataset(liste_data, False, "test")
     criterion = nn.BCELoss()
     optimizer = torch.optim.Adam(modele.parameters(), lr=1e-4)
     # PinceMain/train_check pour le Lite et PinceMain/train_check1 pour le HandModele1
-    checkpoint_dir = 'PinceMain/train_check_lite.pth'
-    checkpoint_prefix = os.path.join(checkpoint_dir, 'ckpt')
+    checkpoint_dir = "PinceMain/train_check_lite.pth"
+    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
 
     EPOCH = 100
 
-    if input('Do you want to load the model? (y/n)') == 'y':
+    if input("Do you want to load the model? (y/n)") == "y":
         modele.load_state_dict(torch.load(checkpoint_dir))
 
-    train(train_dataloader, EPOCH, modele,
-          optimizer, criterion, checkpoint_dir)
+    train(train_dataloader, EPOCH, modele, optimizer, criterion, checkpoint_dir)
 
     # Charger le modèle si nécessaire
-    if input('Do you want to load the model for testing? (y/n)') == 'y':
+    if input("Do you want to load the model for testing? (y/n)") == "y":
         modele.load_state_dict(torch.load(checkpoint_dir))
         print("Modèle chargé.")
 
     # Tester le modèle avec affichage des différences
-    if input('Do you want to test the model? (y/n)') == 'y':
-        test_loss = test_model_with_accuracy(
-            modele, test_dataloader, criterion, device)
+    if input("Do you want to test the model? (y/n)") == "y":
+        test_loss = test_model_with_accuracy(modele, test_dataloader, criterion, device)

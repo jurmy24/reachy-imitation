@@ -1,7 +1,7 @@
 [project]
 name = "reachy-imitation"
 version = "0.1.0"
-description = "Add your description here"
+description = "Using ML to teach Pollen Robotics' Reachy robot to imitate humans live."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
