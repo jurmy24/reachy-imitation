@@ -1,4 +1,4 @@
-"""Premier test d analyse des angles de l'épaule par caméra 3D"""
+"""Premier test d'analyse des angles de l'épaule par caméra 3D"""
 
 import numpy as np
 import cv2
