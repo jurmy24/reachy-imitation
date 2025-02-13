@@ -19,35 +19,37 @@ pipeline.start(config)
 # Aligner les flux couleur et profondeur
 align = rs.align(rs.stream.color)
 
+
 def calcul_angles(r_s, r_h, l_s, r_e):
     # Étape 1 : Calcul des vecteurs du plan
-    r_s,r_e,r_h,l_s=np.array(r_s),np.array(r_e),np.array(r_h),np.array(l_s)
+    r_s, r_e, r_h, l_s = np.array(r_s), np.array(
+        r_e), np.array(r_h), np.array(l_s)
     v1 = r_h - r_s
     v2 = l_s - r_s
-    
+
     # Vecteur normal au plan
     normal = np.cross(v1, v2)
     normal = normal / np.linalg.norm(normal)  # Normalisation
-    
+
     # Étape 2 : Définir une base locale
     u = v1 / np.linalg.norm(v1)  # Premier vecteur de la base locale
     w = normal  # Normal au plan
     v = np.cross(w, u)  # Second vecteur de la base locale
-    
+
     # Étape 3 : Exprimer r_e dans cette base
     r_e_local = r_e - r_s  # Vecteur de l'origine au point r_e
     x_prime = np.dot(r_e_local, u)
     y_prime = np.dot(r_e_local, v)
     z_prime = np.dot(r_e_local, w)
-    
+
     # Étape 4 : Calcul des angles sphériques
     theta = np.arctan2(y_prime, x_prime)  # Azimut
     phi = np.arctan2(z_prime, np.sqrt(x_prime**2 + y_prime**2))  # Élévation
-    
+
     # Conversion en degrés
     theta_deg = np.degrees(theta)
     phi_deg = np.degrees(phi)
-    
+
     return theta_deg, phi_deg
 
 
@@ -107,7 +109,7 @@ try:
 
             # Calcul des angles pour l'épaule droite
             r_shoulder_pitch, r_shoulder_roll = calcul_angles(
-                r_shoulder, r_hip,l_shoulder,r_elbow)
+                r_shoulder, r_hip, l_shoulder, r_elbow)
 
             # Affichage des angles sur l'image
             cv2.putText(color_image, f'Pitch: {int(r_shoulder_pitch)} deg',
