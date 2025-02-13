@@ -14,7 +14,7 @@ Contributeurs (Semestre 8) :
 - Lafaury, Marin
 - Oldensand, Victor
 - Ghandi, Hugo
-- TBD, Charlie
+- Ye, Yi
 
 Encadrants :
 
