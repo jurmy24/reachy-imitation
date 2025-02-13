@@ -67,6 +67,7 @@ if __name__ == "__main__":
         # Dessiner les annotations et vérifier si la main est ouverte
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
+                print(hand_landmarks.landmark[0])
                 mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 hand_type = (
                     "Main gauche" if is_left_hand(hand_landmarks) else "Main droite"
