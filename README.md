@@ -34,5 +34,9 @@ pouvez copier les lignes suivantes et les executer pour préparer l'environnemen
 uv sync
 ```
 
+## Le Dashboard
+
+Quand le robot est connecté il est possible to visualiser l'état des joints et moteurs sur le site `<robot-ip>:3972` dans un navigateur.
+
 Organisation :
 Nous avons développé différents programmes. Certains servent uniquement à se connecter au robot, d'autres servent uniquement à des expèriences de visions, d'autres encore combinent vision et controle.
