@@ -4,6 +4,8 @@ import numpy as np
 import pyrealsense2 as rs
 # import utils.angles as utils
 
+
+
 # Initialiser MediaPipe Hands
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(False, 2)  # You can also specify confidence levels here
@@ -12,11 +14,15 @@ mp_draw = mp.solutions.drawing_utils
 TOP_LEFT_X_LABEL = 10
 TOP_LEFT_Y_LABEL = 30
 
-HANDEDNESS_CERTAINTY = 0.9  # There's a tradeoff here between whether it recognises
+HANDEDNESS_CERTAINTY_UPPER = 0.9  # There's a tradeoff here between whether it recognises
 # a hand and whether it confuses between a left and right hand
-
-""""""
-
+HANDEDNESS_CERTAINTY_LOWER = 0.7
+FINGER_TIPS = [mp_hands.HandLandmark.THUMB_TIP.value,
+                mp_hands.HandLandmark.INDEX_FINGER_TIP.value,
+                mp_hands.HandLandmark.MIDDLE_FINGER_TIP.value,
+                mp_hands.HandLandmark.RING_FINGER_TIP.value,
+                mp_hands.HandLandmark.PINKY_TIP.value,
+                ]  # [4, 8, 12, 16, 20]
 
 def calculate_distance_with_depth(point1, point2):
     # this should account for depth
@@ -29,18 +35,11 @@ def calculate_distance(point1, point2):
 
 def is_hand_open(hand_landmarks):
     # Indices des points de repère pour les pointes des doigts et le centre de la paume
-    finger_tips = [mp_hands.HandLandmark.THUMB_TIP.value,
-                   mp_hands.HandLandmark.INDEX_FINGER_TIP.value,
-                   mp_hands.HandLandmark.MIDDLE_FINGER_TIP.value,
-                   mp_hands.HandLandmark.RING_FINGER_TIP.value,
-                   mp_hands.HandLandmark.PINKY_TIP.value,
-                   ]  # [4, 8, 12, 16, 20]
-
     # Point de repère pour le centre de la paume
     palm_base = hand_landmarks.landmark[0]
 
     open_fingers = 0
-    for tip in finger_tips:
+    for tip in FINGER_TIPS:
         if calculate_distance(
             hand_landmarks.landmark[tip], palm_base
         ) > calculate_distance(hand_landmarks.landmark[tip - 3], palm_base):
@@ -49,30 +48,48 @@ def is_hand_open(hand_landmarks):
         open_fingers >= 3
     )  # Considérer la main ouverte si au moins 3 doigts sont ouverts
 
-
-# or half close, depending on your vision, is your glass half empty or half full
-def is_hand_half_open(hand_landmarks):
+def is_hand_closed(hand_landmarks):
     # Indices des points de repère pour les pointes des doigts et le centre de la paume
-    finger_tips = [mp_hands.HandLandmark.THUMB_TIP.value,
-                   mp_hands.HandLandmark.INDEX_FINGER_TIP.value,
-                   mp_hands.HandLandmark.MIDDLE_FINGER_TIP.value,
-                   mp_hands.HandLandmark.RING_FINGER_TIP.value,
-                   mp_hands.HandLandmark.PINKY_TIP.value,
-                   ]  # [4, 8, 12, 16, 20]
-
     # Point de repère pour le centre de la paume
     palm_base = hand_landmarks.landmark[0]
 
     open_fingers = 0
-    for tip in finger_tips:
+    for tip in FINGER_TIPS:
+        if calculate_distance(
+            hand_landmarks.landmark[tip], palm_base
+        ) > calculate_distance(hand_landmarks.landmark[tip - 3], palm_base):
+            open_fingers += 1
+    return (
+        open_fingers <= 2
+    )  # Considérer la main ferme si au moins 3 doigts sont ouverts
+
+
+# or half close, depending on your vision, is your glass half empty or half full
+def is_hand_half_closed(hand_landmarks):
+    # Indices des points de repère pour les pointes des doigts et le centre de la paume
+
+
+    # Point de repère pour le centre de la paume
+    palm_base = hand_landmarks.landmark[0]
+    """
+    half_open_fingers = 0
+    for tip in FINGER_TIPS:
         if calculate_distance(
             hand_landmarks.landmark[tip], palm_base
         ) > (calculate_distance(hand_landmarks.landmark[tip - 2], palm_base) + calculate_distance(hand_landmarks.landmark[tip - 1], palm_base))*0.5:
-            open_fingers += 1
+            half_open_fingers += 1
     return (
-        open_fingers >= 3
+        half_open_fingers >= 3
     )  # Considérer la main entreouverte si au moins 3 doigts sont entreouverts
-
+    """
+    half_closed_fingers = 0
+    for tip in FINGER_TIPS:
+        tip_to_palm = calculate_distance(hand_landmarks.landmark[tip], palm_base)
+        if tip_to_palm < (calculate_distance(hand_landmarks.landmark[tip - 2], palm_base)):
+            half_closed_fingers += 1
+    return (
+        half_closed_fingers >= 3
+    )  # Considérer la main entreouverte si au moins 3 doigts sont entreouverts
 
 def get_3d_coordinates(landmark):
     """Obtenir les coordonnées x, y, z pour un landmark en utilisant la caméra de profondeur."""
@@ -103,6 +120,14 @@ def flip_hand_labels(hand_label: str):
     else:
         return "Droit"
 
+def get_label(index, hand):
+    output = "Unknown", 0
+    for idx, classification in enumerate(results.multi_handedness):
+        if classification.classification[0].index == index:
+            label = classification.classification[0].index 
+            score = classification.classification[0].score
+            output = label, score
+    return output
 
 if __name__ == "__main__":
 
@@ -118,6 +143,7 @@ if __name__ == "__main__":
     # Aligner les flux couleur et profondeur pour synchroniser les données
     align = rs.align(rs.stream.color)
 
+    previous_hand_type = ["Unknown", "Unknown"]
     while True:
         # ret, frame = cap.read()
         frames = pipeline.wait_for_frames()
@@ -148,16 +174,26 @@ if __name__ == "__main__":
         results = hands.process(rgb_image)
 
         # Dessiner les annotations et vérifier si la main est ouverte
+
         if results.multi_hand_landmarks:
-            for hand_num in range(len(results.multi_hand_landmarks)):
-                hand_landmarks = results.multi_hand_landmarks[hand_num]
+            for index, hand_landmarks in enumerate(results.multi_hand_landmarks):
+                
+                #hand_landmarks = results.multi_hand_landmarks[hand_num]
+
+                #hand_type, certainty = get_label(index, results)
                 hand_type = flip_hand_labels(
-                    results.multi_handedness[hand_num].classification[0].label)
+                    results.multi_handedness[index].classification[0].label)
+                certainty = results.multi_handedness[index].classification[0].score
+                
 
-                certainty = results.multi_handedness[hand_num].classification[0].score
-
-                if certainty < HANDEDNESS_CERTAINTY:
+                if certainty < HANDEDNESS_CERTAINTY_LOWER:
                     hand_type = "Unknown"
+                else:
+                    if certainty < HANDEDNESS_CERTAINTY_UPPER and previous_hand_type[index] != hand_type:
+                        hand_type = "Unknown"
+
+                previous_hand_type[index] = hand_type
+                
 
                 """
                 if (hand_type == "Gauche"):
@@ -166,7 +202,7 @@ if __name__ == "__main__":
 
                 mp_draw.draw_landmarks(
                     color_image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-
+                """
                 if is_hand_open(hand_landmarks):
                     text = f"Main {hand_type} ouverte"
                     colour = (0, 255, 0)
@@ -176,6 +212,16 @@ if __name__ == "__main__":
                 else:
                     text = f"Main {hand_type} ferme"
                     colour = (0, 0, 255)
+                """
+                if is_hand_closed(hand_landmarks):
+                    text = f"Main {hand_type} ferme"
+                    colour = (0, 0, 255)
+                elif is_hand_half_closed(hand_landmarks):
+                    text = f"Main {hand_type} entreouverte"
+                    colour = (255, 0, 0)
+                else:
+                    text = f"Main {hand_type} ouverte"
+                    colour = (0, 255, 0)
 
                 if hand_type == "Gauche":
                     label_coordinate = (
@@ -224,6 +270,9 @@ if __name__ == "__main__":
     pipeline.stop()
     cv2.destroyAllWindows()
 
+
+
+    # THIS IS CODE USED FOR THE REGULAR 2D CAMERA
     """
     pipeline = rs.pipeline()
     config = rs.config()
