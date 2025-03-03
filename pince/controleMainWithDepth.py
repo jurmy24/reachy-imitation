@@ -48,6 +48,21 @@ def is_hand_open(hand_landmarks):
         open_fingers >= 3
     )  # Considérer la main ouverte si au moins 3 doigts sont ouverts
 
+def is_hand_half_open(hand_landmarks):
+    # Indices des points de repère pour les pointes des doigts et le centre de la paume
+    # Point de repère pour le centre de la paume
+    palm_base = hand_landmarks.landmark[0]
+
+    open_fingers = 0
+    for tip in FINGER_TIPS:
+        if calculate_distance(
+            hand_landmarks.landmark[tip], palm_base
+        ) > calculate_distance(hand_landmarks.landmark[tip - 2], palm_base):
+            open_fingers += 1
+    return (
+        open_fingers >= 3
+    )  # Considérer la main ouverte si au moins 3 doigts sont ouverts
+
 def is_hand_closed(hand_landmarks):
     # Indices des points de repère pour les pointes des doigts et le centre de la paume
     # Point de repère pour le centre de la paume

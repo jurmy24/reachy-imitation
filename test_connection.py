@@ -29,20 +29,36 @@ def test_bras_droit() -> None:
         interpolation_mode=InterpolationMode.MINIMUM_JERK,
     )
 
+def test_bras_gauche() -> None:
+    right_angled_position = {
+        reachy.l_arm.l_shoulder_pitch: 0,
+        reachy.l_arm.l_shoulder_roll: 30,
+        reachy.l_arm.l_arm_yaw: 0,
+        reachy.l_arm.l_elbow_pitch: 0,
+        reachy.l_arm.l_forearm_yaw: 0,
+        reachy.l_arm.l_wrist_pitch: 0,
+        reachy.l_arm.l_wrist_roll: 0,
+    }
+    reachy.turn_on("l_arm")
+    goto(
+        goal_positions=right_angled_position,
+        duration=1.0,
+        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+    )
 
 def test_deux_bras() -> None:
     angled_position = {
         reachy.l_arm.l_shoulder_pitch: 0,
-        reachy.l_arm.l_shoulder_roll: 90,
-        reachy.l_arm.l_arm_yaw: -90,
-        reachy.l_arm.l_elbow_pitch: -90,
+        reachy.l_arm.l_shoulder_roll: 30,
+        reachy.l_arm.l_arm_yaw: 0,
+        reachy.l_arm.l_elbow_pitch: 0,
         reachy.l_arm.l_forearm_yaw: 0,
         reachy.l_arm.l_wrist_pitch: 0,
         reachy.l_arm.l_wrist_roll: 0,
         reachy.r_arm.r_shoulder_pitch: 0,
-        reachy.r_arm.r_shoulder_roll: -90,
-        reachy.r_arm.r_arm_yaw: -90,
-        reachy.r_arm.r_elbow_pitch: -90,
+        reachy.r_arm.r_shoulder_roll: -30,
+        reachy.r_arm.r_arm_yaw: 0,
+        reachy.r_arm.r_elbow_pitch: 0,
         reachy.r_arm.r_forearm_yaw: 0,
         reachy.r_arm.r_wrist_pitch: 0,
         reachy.r_arm.r_wrist_roll: 0,
@@ -58,7 +74,8 @@ def test_deux_bras() -> None:
 
 if __name__ == "__main__":
     test_bras_droit()
-    # test_deux_bras()
+    #test_bras_gauche()
+    #test_deux_bras()
 
     reachy.turn_off_smoothly("r_arm")
     reachy.turn_off_smoothly("l_arm")
