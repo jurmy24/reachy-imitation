@@ -85,7 +85,7 @@ def get_human_arm_dh_params(joint_angles: list[float], arm="right"):
         raise ValueError("Only right arm is supported for now")
 
 
-def calculate_joint_positions(joint_angles: list[float], arm="right"):
+def calculate_human_joint_positions(joint_angles: list[float], arm="right"):
     """
     Calculate positions of all joints, including the base and end effector.
 
@@ -117,7 +117,7 @@ import numpy as np
 from reachy_sdk import ReachySDK
 
 
-def calculate_joint_positions(reachy, joint_angles=None, side="right"):
+def calculate_reachy_joint_positions(reachy, joint_angles=None, side="right"):
     """
     Calculate the positions of all joints in coordinate space using the Reachy SDK.
 
