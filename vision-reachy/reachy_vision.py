@@ -12,3 +12,12 @@ while True:
 
     cv.imshow("left image", left_image)
     cv.waitKey(30)
+
+from reachy_sdk.trajectory import goto
+goto(
+	goal_positions=right_angled_position,
+	duration=1.0,
+	interpolation_mode=InterpolationMode.MINIMUM_JERK
+	)
+
+reachy.r_arm.inverse_kinematics()
