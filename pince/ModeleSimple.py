@@ -8,7 +8,7 @@ from torchinfo import summary
 from torchvision import transforms
 import csv
 from HandGestureUtils import *
-from PinceMain.HandGestureUtils import *
+from pince.HandGestureUtils import *
 
 
 def former_dataset(liste_data, shuffle, cat):

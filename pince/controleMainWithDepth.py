@@ -228,6 +228,8 @@ if __name__ == "__main__":
                     text = f"Main {hand_type} ferme"
                     colour = (0, 0, 255)
                 """
+                print(hand_landmarks.landmark[0])
+
                 if is_hand_closed(hand_landmarks):
                     text = f"Main {hand_type} ferme"
                     colour = (0, 0, 255)
