@@ -1,61 +1,43 @@
 # This script extracts 3D points from a human using a depth camera (Intel RealSense D435i)
-from typing import Literal, Any, Dict
+from typing import Literal
 import cv2
 import mediapipe as mp
 import pyrealsense2 as rs
 import numpy as np
 
+# Initialize MediaPipe for hand and body point map detection
+mp_hands = mp.solutions.hands
+mp_pose = mp.solutions.pose
 
-def _setup() -> tuple[
-    mp.solutions.hands,
-    mp.solutions.pose,
-    mp.solutions.hands.Hands,
-    mp.solutions.pose.Pose,
-    rs.align,
-    rs.pipeline,
-    Any,
-]:
-    """Setup cameras and models with configurable resolution and fps"""
-    # Initialize MediaPipe for hand and body point map detection
-    mp_hands = mp.solutions.hands
-    mp_pose = mp.solutions.pose
+# Create model instances with optimized parameters
+hands = mp_hands.Hands(
+    static_image_mode=False,  # Faster for video streams
+    max_num_hands=2,  # We only need two hands max
+)
 
-    # Create model instances with optimized parameters
-    # Set min_detection_confidence and min_tracking_confidence lower for better performance
-    hands = mp_hands.Hands(
-        static_image_mode=False,  # Faster for video streams
-        max_num_hands=2,  # We only need two hands max
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
+pose = mp_pose.Pose(
+    static_image_mode=False,  # Faster for video streams
+    smooth_landmarks=True,
+)
 
-    pose = mp_pose.Pose(
-        static_image_mode=False,  # Faster for video streams
-        model_complexity=1,  # Medium complexity (0=low, 1=medium, 2=high)
-        smooth_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
+# Configure intel RealSense camera (color and depth streams)
+pipeline = rs.pipeline()
+config = rs.config()
+config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
 
-    # Configure intel RealSense camera (color and depth streams)
-    config = rs.config()
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+# Align depth frame to color frame
+align = rs.align(rs.stream.color)
+profile = pipeline.start(config)
 
-    # Align depth frame to color frame
-    align = rs.align(rs.stream.color)
-    pipeline = rs.pipeline()
-    profile = pipeline.start(config)
-
-    # Cache intrinsics for repeated use
-    intrinsics = (
-        profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
-    )
-
-    return (mp_hands, mp_pose, hands, pose, align, pipeline, intrinsics)
+# Cache intrinsics for repeated use
+intrinsics = (
+    profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+)
 
 
-def _get_3D_coordinates(landmark, depth_frame, w, h, intrinsics) -> np.ndarray:
+# Helper function to convert a landmark to 3D coordinates
+def get_3D_coordinates(landmark, depth_frame, w, h):
     """Convert a landmark to 3D coordinates using depth information.
 
     Transforms from camera coordinates to robot coordinates:
@@ -84,145 +66,7 @@ def _get_3D_coordinates(landmark, depth_frame, w, h, intrinsics) -> np.ndarray:
     return np.array([0, 0, 0])
 
 
-def _get_right_arm_coordinates(
-    mp_pose, mp_hands, pose_landmark, hand_results, depth_frame, w, h, intrinsics
-) -> Dict[str, np.ndarray]:
-    right_arm_points = {
-        "shoulder_right": _get_3D_coordinates(
-            pose_landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER],
-            depth_frame,
-            w,
-            h,
-            intrinsics,
-        ),
-        "elbow_right": _get_3D_coordinates(
-            pose_landmark[mp_pose.PoseLandmark.RIGHT_ELBOW],
-            depth_frame,
-            w,
-            h,
-            intrinsics,
-        ),
-        "wrist_right": _get_3D_coordinates(
-            pose_landmark[mp_pose.PoseLandmark.RIGHT_WRIST],
-            depth_frame,
-            w,
-            h,
-            intrinsics,
-        ),
-    }
-
-    # Get relative coordinates of the right arm with shoulder as origin
-    right_arm_relative_coordinates = {}
-    for name, coord in right_arm_points.items():
-        right_arm_relative_coordinates[name] = (
-            coord - right_arm_points["shoulder_right"]
-        )
-
-    # Filter for the right hand among detected hands
-    if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
-        for i, hand_landmark in enumerate(hand_results.multi_hand_landmarks):
-            # Check if this is the right hand
-            hand_type = hand_results.multi_handedness[i].classification[0].label
-            if hand_type == "Right":  # Only process if it's the right hand
-                index_mcp = _get_3D_coordinates(
-                    hand_landmark.landmark[mp_hands.HandLandmark.INDEX_FINGER_MCP],
-                    depth_frame,
-                    w,
-                    h,
-                    intrinsics,
-                )
-                pinky_mcp = _get_3D_coordinates(
-                    hand_landmark.landmark[mp_hands.HandLandmark.PINKY_MCP],
-                    depth_frame,
-                    w,
-                    h,
-                    intrinsics,
-                )
-
-                right_arm_relative_coordinates["index_mcp"] = (
-                    index_mcp - right_arm_points["shoulder_right"]
-                )
-                right_arm_relative_coordinates["pinky_mcp"] = (
-                    pinky_mcp - right_arm_points["shoulder_right"]
-                )
-                break  # Found the right hand, no need to continue
-
-    return right_arm_relative_coordinates
-
-
-def _get_left_arm_coordinates(
-    mp_pose, mp_hands, pose_landmark, hand_results, depth_frame, w, h, intrinsics
-) -> Dict[str, np.ndarray]:
-    left_arm_points = {
-        "shoulder_left": _get_3D_coordinates(
-            pose_landmark[mp_pose.PoseLandmark.LEFT_SHOULDER],
-            depth_frame,
-            w,
-            h,
-            intrinsics,
-        ),
-        "elbow_left": _get_3D_coordinates(
-            pose_landmark[mp_pose.PoseLandmark.LEFT_ELBOW],
-            depth_frame,
-            w,
-            h,
-            intrinsics,
-        ),
-        "wrist_left": _get_3D_coordinates(
-            pose_landmark[mp_pose.PoseLandmark.LEFT_WRIST],
-            depth_frame,
-            w,
-            h,
-            intrinsics,
-        ),
-    }
-
-    # Get relative coordinates of the left arm with shoulder as origin
-    left_arm_relative_coordinates = {}
-    for name, coord in left_arm_points.items():
-        left_arm_relative_coordinates[name] = coord - left_arm_points["shoulder_left"]
-
-    # Filter for the left hand among detected hands
-    if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
-        for i, hand_landmark in enumerate(hand_results.multi_hand_landmarks):
-            # Check if this is the left hand
-            hand_type = hand_results.multi_handedness[i].classification[0].label
-            if hand_type == "Left":  # Only process if it's the left hand
-                index_mcp = _get_3D_coordinates(
-                    hand_landmark.landmark[mp_hands.HandLandmark.INDEX_FINGER_MCP],
-                    depth_frame,
-                    w,
-                    h,
-                    intrinsics,
-                )
-                pinky_mcp = _get_3D_coordinates(
-                    hand_landmark.landmark[mp_hands.HandLandmark.PINKY_MCP],
-                    depth_frame,
-                    w,
-                    h,
-                    intrinsics,
-                )
-
-                left_arm_relative_coordinates["index_mcp"] = (
-                    index_mcp - left_arm_points["shoulder_left"]
-                )
-                left_arm_relative_coordinates["pinky_mcp"] = (
-                    pinky_mcp - left_arm_points["shoulder_left"]
-                )
-                break  # Found the left hand, no need to continue
-
-    return left_arm_relative_coordinates
-
-
 def run(arm: Literal["right", "left", "both"] = "right"):
-    # Initialize MediaPipe and RealSense camera for hand and body point map detection
-    # Models are created once, outside the main loop
-    mp_hands, mp_pose, hands, pose, align, pipeline, cached_intrinsics = _setup()
-
-    # Initialize coordinate dictionaries outside the loop
-    right_arm_coordinates = {}
-    left_arm_coordinates = {}
-
     try:
         while True:
             # Get frames from RealSense camera
@@ -242,7 +86,7 @@ def run(arm: Literal["right", "left", "both"] = "right"):
             # Get height and width of the color image
             h, w, _ = color_image.shape
 
-            # Reset arm coordinates for this frame
+            # Initialize arm coordinates for this frame
             right_arm_coordinates = {}
             left_arm_coordinates = {}
 
@@ -250,35 +94,122 @@ def run(arm: Literal["right", "left", "both"] = "right"):
             pose_results = pose.process(rgb_image)
             hand_results = hands.process(rgb_image)
 
-            if pose_results.pose_landmarks and hand_results.multi_hand_landmarks:
-                pose_landmark = pose_results.pose_landmarks.landmark
+            if pose_results.pose_landmarks:
+                landmarks = pose_results.pose_landmarks.landmark
 
+                # Process right arm if requested
                 if arm == "right" or arm == "both":
-                    right_arm_coordinates = _get_right_arm_coordinates(
-                        mp_pose,
-                        mp_hands,
-                        pose_landmark,
-                        hand_results,
+                    # Get right arm joint positions
+                    right_shoulder = get_3D_coordinates(
+                        landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER],
                         depth_frame,
                         w,
                         h,
-                        cached_intrinsics,
+                    )
+                    right_elbow = get_3D_coordinates(
+                        landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW], depth_frame, w, h
+                    )
+                    right_wrist = get_3D_coordinates(
+                        landmarks[mp_pose.PoseLandmark.RIGHT_WRIST], depth_frame, w, h
                     )
 
+                    # Store points relative to shoulder
+                    right_arm_coordinates["shoulder_right"] = np.array(
+                        [0, 0, 0]
+                    )  # Origin
+                    right_arm_coordinates["elbow_right"] = right_elbow - right_shoulder
+                    right_arm_coordinates["wrist_right"] = right_wrist - right_shoulder
+
+                # Process left arm if requested
                 if arm == "left" or arm == "both":
-                    left_arm_coordinates = _get_left_arm_coordinates(
-                        mp_pose,
-                        mp_hands,
-                        pose_landmark,
-                        hand_results,
-                        depth_frame,
-                        w,
-                        h,
-                        cached_intrinsics,
+                    # Get left arm joint positions
+                    left_shoulder = get_3D_coordinates(
+                        landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER], depth_frame, w, h
                     )
+                    left_elbow = get_3D_coordinates(
+                        landmarks[mp_pose.PoseLandmark.LEFT_ELBOW], depth_frame, w, h
+                    )
+                    left_wrist = get_3D_coordinates(
+                        landmarks[mp_pose.PoseLandmark.LEFT_WRIST], depth_frame, w, h
+                    )
+
+                    # Store points relative to shoulder
+                    left_arm_coordinates["shoulder_left"] = np.array(
+                        [0, 0, 0]
+                    )  # Origin
+                    left_arm_coordinates["elbow_left"] = left_elbow - left_shoulder
+                    left_arm_coordinates["wrist_left"] = left_wrist - left_shoulder
+
+                # Process hands if detected
+                if hand_results.multi_hand_landmarks:
+                    # Process hands when we have both hand and body landmarks
+                    right_hand_idx = -1
+                    left_hand_idx = -1
+
+                    # Find indices of right and left hands if handedness is available
+                    if hand_results.multi_handedness:
+                        for i, handedness in enumerate(hand_results.multi_handedness):
+                            hand_type = handedness.classification[0].label
+                            if hand_type == "Right":
+                                right_hand_idx = i
+                            elif hand_type == "Left":
+                                left_hand_idx = i
+
+                    # If no handedness info, make assumptions based on available hands
+                    if right_hand_idx == -1 and left_hand_idx == -1:
+                        if len(hand_results.multi_hand_landmarks) >= 1:
+                            right_hand_idx = 0
+                        if len(hand_results.multi_hand_landmarks) >= 2:
+                            left_hand_idx = 1
+
+                    # Process right hand if available and requested
+                    if (arm == "right" or arm == "both") and right_hand_idx >= 0:
+                        right_hand = hand_results.multi_hand_landmarks[right_hand_idx]
+
+                        # Get finger MCP points
+                        index_mcp = get_3D_coordinates(
+                            right_hand.landmark[mp_hands.HandLandmark.INDEX_FINGER_MCP],
+                            depth_frame,
+                            w,
+                            h,
+                        )
+                        pinky_mcp = get_3D_coordinates(
+                            right_hand.landmark[mp_hands.HandLandmark.PINKY_MCP],
+                            depth_frame,
+                            w,
+                            h,
+                        )
+
+                        # Store relative to right shoulder
+                        right_arm_coordinates["index_mcp"] = index_mcp - right_shoulder
+                        right_arm_coordinates["pinky_mcp"] = pinky_mcp - right_shoulder
+
+                    # Process left hand if available and requested
+                    if (arm == "left" or arm == "both") and left_hand_idx >= 0:
+                        left_hand = hand_results.multi_hand_landmarks[left_hand_idx]
+
+                        # Get finger MCP points
+                        index_mcp = get_3D_coordinates(
+                            left_hand.landmark[mp_hands.HandLandmark.INDEX_FINGER_MCP],
+                            depth_frame,
+                            w,
+                            h,
+                        )
+                        pinky_mcp = get_3D_coordinates(
+                            left_hand.landmark[mp_hands.HandLandmark.PINKY_MCP],
+                            depth_frame,
+                            w,
+                            h,
+                        )
+
+                        # Store relative to left shoulder
+                        left_arm_coordinates["index_mcp"] = index_mcp - left_shoulder
+                        left_arm_coordinates["pinky_mcp"] = pinky_mcp - left_shoulder
 
             # Display 3D coordinates on the image
             y_offset = 30
+
+            # Display right arm coordinates
             for name, coord in right_arm_coordinates.items():
                 x, y, z = coord
                 cv2.putText(
@@ -292,6 +223,7 @@ def run(arm: Literal["right", "left", "both"] = "right"):
                 )
                 y_offset += 20
 
+            # Display left arm coordinates
             for name, coord in left_arm_coordinates.items():
                 x, y, z = coord
                 cv2.putText(
