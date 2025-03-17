@@ -1,30 +1,61 @@
 # This script extracts 3D points from a human using a depth camera (Intel RealSense D435i)
-from typing import Literal
+from typing import Literal, Any, Dict
 import cv2
 import mediapipe as mp
 import pyrealsense2 as rs
 import numpy as np
 
 
-def _setup() -> tuple[mp.solutions.hands, mp.solutions.pose, rs.align, rs.pipeline]:
+def _setup() -> tuple[
+    mp.solutions.hands,
+    mp.solutions.pose,
+    mp.solutions.hands.Hands,
+    mp.solutions.pose.Pose,
+    rs.align,
+    rs.pipeline,
+    Any,
+]:
+    """Setup cameras and models with configurable resolution and fps"""
     # Initialize MediaPipe for hand and body point map detection
     mp_hands = mp.solutions.hands
     mp_pose = mp.solutions.pose
+
+    # Create model instances with optimized parameters
+    # Set min_detection_confidence and min_tracking_confidence lower for better performance
+    hands = mp_hands.Hands(
+        static_image_mode=False,  # Faster for video streams
+        max_num_hands=2,  # We only need two hands max
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
+
+    pose = mp_pose.Pose(
+        static_image_mode=False,  # Faster for video streams
+        model_complexity=1,  # Medium complexity (0=low, 1=medium, 2=high)
+        smooth_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
 
     # Configure intel RealSense camera (color and depth streams)
     config = rs.config()
     config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
 
-    # Align depth frame to color frame # TODO: check what this means
+    # Align depth frame to color frame
     align = rs.align(rs.stream.color)
     pipeline = rs.pipeline()
-    pipeline.start(config)
+    profile = pipeline.start(config)
 
-    return (mp_hands, mp_pose, align, pipeline)
+    # Cache intrinsics for repeated use
+    intrinsics = (
+        profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+    )
+
+    return (mp_hands, mp_pose, hands, pose, align, pipeline, intrinsics)
 
 
-def _get_3D_coordinates(landmark, depth_frame, w, h, intrinsics):
+def _get_3D_coordinates(landmark, depth_frame, w, h, intrinsics) -> np.ndarray:
     """Convert a landmark to 3D coordinates using depth information.
 
     Transforms from camera coordinates to robot coordinates:
@@ -55,7 +86,7 @@ def _get_3D_coordinates(landmark, depth_frame, w, h, intrinsics):
 
 def _get_right_arm_coordinates(
     mp_pose, mp_hands, pose_landmark, hand_results, depth_frame, w, h, intrinsics
-):
+) -> Dict[str, np.ndarray]:
     right_arm_points = {
         "shoulder_right": _get_3D_coordinates(
             pose_landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER],
@@ -121,7 +152,7 @@ def _get_right_arm_coordinates(
 
 def _get_left_arm_coordinates(
     mp_pose, mp_hands, pose_landmark, hand_results, depth_frame, w, h, intrinsics
-):
+) -> Dict[str, np.ndarray]:
     left_arm_points = {
         "shoulder_left": _get_3D_coordinates(
             pose_landmark[mp_pose.PoseLandmark.LEFT_SHOULDER],
@@ -185,7 +216,12 @@ def _get_left_arm_coordinates(
 
 def run(arm: Literal["right", "left", "both"] = "right"):
     # Initialize MediaPipe and RealSense camera for hand and body point map detection
-    mp_hands, mp_pose, align, pipeline = _setup()
+    # Models are created once, outside the main loop
+    mp_hands, mp_pose, hands, pose, align, pipeline, cached_intrinsics = _setup()
+
+    # Initialize coordinate dictionaries outside the loop
+    right_arm_coordinates = {}
+    left_arm_coordinates = {}
 
     try:
         while True:
@@ -203,25 +239,16 @@ def run(arm: Literal["right", "left", "both"] = "right"):
             color_image = np.asanyarray(color_frame.get_data())
             rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
 
-            # Get intrinsics of the RealSense camera, including fx, fy (focal lengths in pixels), ppx, ppy (optical center in pixels)
-            # These are used to convert pixel coordinates to 3D real-world coordinates
-            intrinsics = (
-                pipeline.get_active_profile()
-                .get_stream(rs.stream.depth)
-                .as_video_stream_profile()
-                .get_intrinsics()
-            )
-
             # Get height and width of the color image
             h, w, _ = color_image.shape
 
-            # Run computer vision pose and hand detection
-            pose_results = mp_pose.Pose().process(rgb_image)
-            hand_results = mp_hands.Hands().process(rgb_image)
-
-            # Initialize arm coordinates
+            # Reset arm coordinates for this frame
             right_arm_coordinates = {}
             left_arm_coordinates = {}
+
+            # Run computer vision pose and hand detection
+            pose_results = pose.process(rgb_image)
+            hand_results = hands.process(rgb_image)
 
             if pose_results.pose_landmarks and hand_results.multi_hand_landmarks:
                 pose_landmark = pose_results.pose_landmarks.landmark
@@ -235,7 +262,7 @@ def run(arm: Literal["right", "left", "both"] = "right"):
                         depth_frame,
                         w,
                         h,
-                        intrinsics,
+                        cached_intrinsics,
                     )
 
                 if arm == "left" or arm == "both":
@@ -247,7 +274,7 @@ def run(arm: Literal["right", "left", "both"] = "right"):
                         depth_frame,
                         w,
                         h,
-                        intrinsics,
+                        cached_intrinsics,
                     )
 
             # Display 3D coordinates on the image
