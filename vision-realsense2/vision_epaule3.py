@@ -19,19 +19,8 @@ pipeline.start(config)
 
 align = rs.align(rs.stream.color)
 
-# Fonction pour obtenir la profondeur du landmark
-
-
-def get_depth(landmark, depth_frame, w, h):
-    cx, cy = int(landmark.x * w), int(landmark.y * h)
-    if 0 <= cx < w and 0 <= cy < h:
-        depth = depth_frame.get_distance(cx, cy)
-        return depth if depth > 0 else None
-    return None
 
 # Fonction pour obtenir les coordonnées 3D
-
-
 def get_3d_coordinates(landmark, depth_frame, w, h, intrinsics):
     cx, cy = int(landmark.x * w), int(landmark.y * h)
     if 0 <= cx < w and 0 <= cy < h:
