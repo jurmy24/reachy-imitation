@@ -3,8 +3,7 @@ import math
 import mediapipe as mp
 import pyrealsense2 as rs
 import cv2
-from points_to_shoulder import get_3d_coordinates
-from scaling_joint_params import test_scale_factors, L_REACHY_FOREARM, L_REACHY_UPPERARM
+from scaling_joint_params import test_scale_factors, L_REACHY_FOREARM, L_REACHY_UPPERARM, get_3d_coordinates
 
 L_REACHY_ARM = L_REACHY_FOREARM + L_REACHY_UPPERARM
 REACHY_R_SHOULDER_TO_ORIGIN = np.array([0, -0.19, 0]) # Ask victor where these constants should live 
@@ -75,10 +74,25 @@ def test_reachy_ik(hand_sf):
             # Récupérer les points du bras droit
             if pose_results.pose_landmarks:
                 landmarks = pose_results.pose_landmarks.landmark
+                
+                if (0.2 > pose_results.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER].visibility 
+                        or 0.2 > pose_results.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_WRIST].visibility):
+                    cv2.putText(
+                        color_image,
+                        f"je ne vois pas ton bras",
+                        (10, 70),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (255, 255, 255),
+                        2,
+                    )
+                    cv2.imshow("RealSense Right Arm IK", color_image)
 
-                #if not (0.5 < pose_results.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER].visibility <= 1):
-
-
+                    # Quitter la boucle si la touche 'q' est pressée
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
+                    continue
+                
                 right_shoulder = get_3d_coordinates(landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER], depth_frame, w, h, intrinsics)
                 wrist_right = get_3d_coordinates(landmarks[mp_pose.PoseLandmark.RIGHT_WRIST], depth_frame, w, h, intrinsics)
                 wrist_right = transform_to_shoulder_origin(wrist_right, right_shoulder)
