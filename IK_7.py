@@ -34,9 +34,9 @@ def compute_transformation_matrices(th, L1, L2):
     T23 = mattransfo(alpha[2], d[2], th[2] - pi/2, r[2])
     T34 = mattransfo(alpha[3], d[3], th[3], r[3])
     T45 = mattransfo(alpha[4], d[4], th[4], r[4])
-    T56 = mattransfo(alpha[5], d[5], th[5], r[5])
-    T67 = mattransfo(alpha[6], d[6], th[6], r[6])
-    T78 = mattransfo(alpha[7], d[7], th[7], r[7])
+    T56 = mattransfo(alpha[5], d[5], th[5] - pi/2, r[5])
+    T67 = mattransfo(alpha[6], d[6], th[6] - pi/2, r[6])
+    T78 = mattransfo(alpha[7], d[7], - pi/2, r[7])
 
     T02 = T01 * T12
     T03 = T02 * T23
@@ -93,7 +93,7 @@ def inverse_kinematics(desired_position, initial_guess, L1, L2, tolerance=1e-6, 
 desired_position = np.array([0.3, 0.2, 0.1])
 
 # Initial guess for joint angles
-initial_guess = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+initial_guess = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
 
 # Link lengths
 L1 = 0.19
@@ -102,4 +102,4 @@ L2 = 0.28
 # Compute inverse kinematics
 joint_angles = inverse_kinematics(desired_position, initial_guess, L1, L2)
 print("Joint Angles:", joint_angles)
-print(forward_kinematics(joint_angles,L1,L2))
+print(forward_kinematics(joint_angles, L1, L2))
