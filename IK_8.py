@@ -102,3 +102,4 @@ L2 = 0.28
 # Compute inverse kinematics
 joint_angles = inverse_kinematics(desired_position, initial_guess, L1, L2)
 print("Joint Angles:", joint_angles)
+print(forward_kinematics(joint_angles,L1,L2))
