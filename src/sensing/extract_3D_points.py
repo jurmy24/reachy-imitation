@@ -150,12 +150,16 @@ def run(arm: Literal["right", "left", "both"] = "right"):
                     if hand_results.multi_handedness:
                         for i, handedness in enumerate(hand_results.multi_handedness):
                             hand_type = handedness.classification[0].label
+                            # FIXED: Swapping handedness because MediaPipe labels are flipped
+                            # When MediaPipe says "Right", it's actually the user's left hand
+                            # When MediaPipe says "Left", it's actually the user's right hand
                             if hand_type == "Right":
-                                right_hand_idx = i
+                                left_hand_idx = i  # This is actually the LEFT hand
                             elif hand_type == "Left":
-                                left_hand_idx = i
+                                right_hand_idx = i  # This is actually the RIGHT hand
 
                     # If no handedness info, make assumptions based on available hands
+                    # This is a fallback but not as reliable as the handedness detection
                     if right_hand_idx == -1 and left_hand_idx == -1:
                         if len(hand_results.multi_hand_landmarks) >= 1:
                             right_hand_idx = 0
