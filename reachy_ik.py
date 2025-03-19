@@ -111,12 +111,13 @@ def test_reachy_ik(hand_sf):
                 wrist_right = get_3d_coordinates(landmarks[mp_pose.PoseLandmark.RIGHT_WRIST], depth_frame, w, h, intrinsics)
                 wrist_right = transform_to_shoulder_origin(wrist_right, right_shoulder)
                 wrist_right = scale_point(hand_sf, wrist_right)
-                reachy_wrist_right = translate_to_reachy_origin(wrist_right)
-                if not within_reachys_reach(reachy_wrist_right):
+
+                if not within_reachys_reach(wrist_right):
                     cv2.imshow("RealSense Right Arm IK", color_image)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
                     continue
+                reachy_wrist_right = translate_to_reachy_origin(wrist_right)
                 
                 #reachy_wrist_right = human_to_robot_coordinates(wrist_right, hand_sf)
 
@@ -141,12 +142,6 @@ def test_reachy_ik(hand_sf):
                     (255, 255, 255),
                     2,
                 )
-                #check the wrist is within reachy's reach
-                if not within_reachys_reach(reachy_wrist_right):
-                    cv2.imshow("RealSense Right Arm IK", color_image)
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        break
-                    continue
 
                 #print(prev_reachy_wrist_right)
                 #print(reachy_wrist_right)
