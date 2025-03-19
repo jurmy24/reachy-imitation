@@ -6,6 +6,8 @@ import pyrealsense2 as rs
 import cv2
 
 
+
+
 L_REACHY_FOREARM = 0.28 # distance (m) from shoulder to elbow
 L_REACHY_UPPERARM = 0.25 + 0.0325 # distance (m) from elbow to wrist
 

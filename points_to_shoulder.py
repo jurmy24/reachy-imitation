@@ -3,6 +3,7 @@ import mediapipe as mp
 import pyrealsense2 as rs
 import numpy as np
 
+
 # Initialiser MediaPipe pour la détection des mains et du corps
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands()
@@ -89,7 +90,7 @@ try:
 
                 right_arm_coordinates["index_mcp"] = transform_to_shoulder_origin(index_mcp)
                 right_arm_coordinates["pinky_mcp"] = transform_to_shoulder_origin(pinky_mcp)
-
+        
         # Afficher les coordonnées 3D sur l'image
         for name, coord in right_arm_coordinates.items():
             x, y, z = coord
