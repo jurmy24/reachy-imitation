@@ -245,13 +245,14 @@ class RobotModelPipeline(Pipeline):
         """
         self.mp_draw = mp.solutions.drawing_utils
 
-        # Step 1 & 2: Track the human's head until they're in position
-        self._watch_human()
+        if self.reachy:
+            # Step 1: Track the human's head until they're in position
+            self._watch_human()
 
-        # Step 3: Reachy demonstrates stretching out arms in front of the human
-        self._demonstrate_stretching()
+            # Step 2: Reachy demonstrates stretching out arms in front of the human
+            self._demonstrate_stretching()
 
-        # Step 4: Human repeats the action and we calculate scale factors
+        # Step 3: Human repeats the action and we calculate scale factors
         hand_sf, elbow_sf = self._calculate_scale_factors()
 
         return hand_sf, elbow_sf
