@@ -3,6 +3,7 @@ import numpy as np
 
 
 def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
+    # Note: This function only calculates for the right arm (assuming arms match in length)
     required_landmarks = [
         mp_pose.PoseLandmark.RIGHT_ELBOW,
         mp_pose.PoseLandmark.RIGHT_SHOULDER,
@@ -20,6 +21,6 @@ def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
     r_shoulder_3d = get_3D_coordinates(r_shoulder, depth_frame, w, h, intrinsics)
     r_wrist_3d = get_3D_coordinates(r_wrist, depth_frame, w, h, intrinsics)
 
-    forearm_length = np.linalg.norm(r_elbow_3d - r_shoulder_3d)
-    upper_length = np.linalg.norm(r_elbow_3d - r_wrist_3d)
-    return forearm_length, upper_length
+    upper_arm_length = np.linalg.norm(r_elbow_3d - r_shoulder_3d)
+    forearm_length = np.linalg.norm(r_elbow_3d - r_wrist_3d)
+    return forearm_length, upper_arm_length

@@ -1,16 +1,17 @@
-# Implement something like this when running imitations in the different approaches
 from abc import ABC, abstractmethod
+from typing import Literal
 import mediapipe as mp
 import pyrealsense2 as rs
-import numpy as np
 import cv2
+from reachy_sdk import ReachySDK
 
 
-class ImitationPipeline(ABC):
+class Pipeline(ABC):
     """Base class for all imitation approaches"""
 
-    def __init__(self):
+    def __init__(self, reachy: ReachySDK = None):
         # Load configs, initialize components (lightweight)
+        self.reachy = reachy
         self.mp_hands = None
         self.mp_pose = None
         self.hands = None
@@ -18,6 +19,7 @@ class ImitationPipeline(ABC):
         self.pipeline = None
         self.align = None
         self.intrinsics = None
+        self.mp_draw = None
         self.initialize()
 
     def initialize(self):
@@ -54,42 +56,34 @@ class ImitationPipeline(ABC):
             .get_intrinsics()
         )
 
+        # NOTE: This turns on the entire Reachy robot (i.e. head and both arms on stiff mode)
+        if self.reachy is not None:
+            self.reachy.turn_on("reachy")
+
     @abstractmethod
-    def recognize_human(self):
+    def initiation_protocol(self):
         """Recognize the human in the frame and calculate the scale factors"""
         pass
 
     @abstractmethod
-    def process_frame(self):
+    def process_frame(self, **kwargs):
         """Process a single frame of input data"""
         pass
 
-    def run(self):
-        """Main processing loop - may be overridden by subclasses if needed"""
-        self.initialize()
-        try:
-            while True:
-                # Get frames from RealSense camera
-                frames = self.pipeline.wait_for_frames()
-                aligned_frames = self.align.process(frames)
-                color_frame = aligned_frames.get_color_frame()
-                depth_frame = aligned_frames.get_depth_frame()
-
-                # Check if frames are valid, if not, skip
-                if not color_frame or not depth_frame:
-                    continue
-
-                # OpenCV uses BGR format, MediaPipe uses RGB format, so we convert the color image
-                color_image = np.asanyarray(color_frame.get_data())
-                rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-
-                # Get height and width of the color image
-                h, w, _ = color_image.shape
-                self.process_frame()
-        finally:
-            self.cleanup()
+    @abstractmethod
+    def display_frame(self, **kwargs):
+        """Display the processed frame with visualization options"""
+        pass
 
     @abstractmethod
+    def run(
+        self, arm: Literal["right", "left", "both"] = "right", display: bool = True
+    ):
+        pass
+
     def cleanup(self):
         """Clean up resources - subclasses can override if needed"""
-        pass
+        self.pipeline.stop()
+        cv2.destroyAllWindows()
+        if self.reachy is not None:
+            self.reachy.turn_off_smoothly("reachy")
