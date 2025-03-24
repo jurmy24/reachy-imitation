@@ -6,8 +6,10 @@ import pyrealsense2 as rs
 import cv2
 
 
-L_REACHY_FOREARM = 0.28 # distance (m) from shoulder to elbow
-L_REACHY_UPPERARM = 0.25 + 0.0325 # distance (m) from elbow to wrist
+
+
+L_REACHY_UPPERARM = 0.28 # distance (m) from elbow to elbow
+L_REACHY_FOREARM = 0.25 + 0.0325 # distance (m) from elbow to wrist
 
 
 def get_3d_coordinates(landmark, depth_frame, w, h, intrinsics):
@@ -46,12 +48,12 @@ def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
     upper_length = np.linalg.norm(r_elbow_3d - r_wrist_3d)
     return forearm_length, upper_length
 
-def get_scale_factors(forearm_length, lower_length):
+def get_scale_factors(forearm_length, upper_length):
     """
     Calculate the scale factors for the Reachy arm
     """
-    hand_sf = (L_REACHY_FOREARM+L_REACHY_UPPERARM) / (forearm_length+lower_length)
-    elbow_sf = L_REACHY_UPPERARM / forearm_length
+    hand_sf = (L_REACHY_FOREARM+L_REACHY_UPPERARM) / (forearm_length+upper_length)
+    elbow_sf = L_REACHY_UPPERARM / upper_length
     return hand_sf, elbow_sf
 
 
