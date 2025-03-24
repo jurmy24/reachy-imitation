@@ -8,7 +8,8 @@ reachy = ReachySDK(host="138.195.196.90")
 
 def main():
     # Create argument parser
-    parser = argparse.ArgumentParser(description="Run Robot Imitation Pipeline")
+    parser = argparse.ArgumentParser(
+        description="Run Robot Imitation Pipeline")
 
     # Add arguments
     parser.add_argument(
@@ -38,8 +39,9 @@ def main():
     # Run calibration if requested
     if args.calibrate or args.only_calibrate:
         print("Running arm length calibration...")
-        hand_sf, elbow_sf = pipeline.recognize_human()
-        print(f"Calibration complete. Hand SF: {hand_sf}, Elbow SF: {elbow_sf}")
+        hand_sf, elbow_sf = pipeline.initiation_protocol()
+        print(
+            f"Calibration complete. Hand SF: {hand_sf}, Elbow SF: {elbow_sf}")
 
         # Exit early if only calibration was requested
         if args.only_calibrate:
@@ -51,6 +53,7 @@ def main():
 
     # Example on how to run:
     # python -m src.main --only-calibrate
+    
 
 
 if __name__ == "__main__":

@@ -79,3 +79,5 @@ if __name__ == "__main__":
 
     reachy.turn_off_smoothly("r_arm")
     reachy.turn_off_smoothly("l_arm")
+    reachy.turn_off_smoothly("head")
+

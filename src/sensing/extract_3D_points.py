@@ -2,7 +2,7 @@
 import mediapipe as mp
 import pyrealsense2 as rs
 import numpy as np
-from src.utils.three_d import get_3D_coordinates
+from src.utils.three_d import get_3D_coordinates_reachy_perspective, get_3D_coordinates
 
 # # Initialize MediaPipe for hand and body point map detection
 # mp_hands = mp.solutions.hands
@@ -75,7 +75,8 @@ def calculate_arm_coordinates(
             )
 
             # Store points relative to shoulder
-            right_arm_coordinates["shoulder_right"] = np.array([0, 0, 0])  # Origin
+            right_arm_coordinates["shoulder_right"] = np.array(
+                [0, 0, 0])  # Origin
             right_arm_coordinates["elbow_right"] = right_elbow - right_shoulder
             right_arm_coordinates["wrist_right"] = right_wrist - right_shoulder
 
@@ -105,7 +106,8 @@ def calculate_arm_coordinates(
             )
 
             # Store points relative to shoulder
-            left_arm_coordinates["shoulder_left"] = np.array([0, 0, 0])  # Origin
+            left_arm_coordinates["shoulder_left"] = np.array(
+                [0, 0, 0])  # Origin
             left_arm_coordinates["elbow_left"] = left_elbow - left_shoulder
             left_arm_coordinates["wrist_left"] = left_wrist - left_shoulder
 
@@ -201,11 +203,11 @@ def get_head_coordinates(pose, mp_pose, intrinsics, rgb_image, depth_frame, w, h
     landmarks = pose_results.pose_landmarks.landmark
 
     # Use nose as the primary head point
-    head_position = get_3D_coordinates(
+    head_position = get_3D_coordinates_reachy_perspective(
         landmarks[mp_pose.PoseLandmark.NOSE], depth_frame, w, h, intrinsics
     )
 
-    # If nose point is invalid (e.g., depth couldn't be measured)
+    """    # If nose point is invalid (e.g., depth couldn't be measured)
     # try using the center point between the eyes
     if head_position is None or np.isnan(head_position).any():
         left_eye = get_3D_coordinates(
@@ -223,7 +225,7 @@ def get_head_coordinates(pose, mp_pose, intrinsics, rgb_image, depth_frame, w, h
             and not np.isnan(left_eye).any()
             and not np.isnan(right_eye).any()
         ):
-            head_position = (left_eye + right_eye) / 2
+            head_position = (left_eye + right_eye) / 2 """
 
     return head_position
 

@@ -1,6 +1,6 @@
 import time
 from typing import Literal
-from src import Pipeline
+from src.pipelines.Pipeline import Pipeline
 from src.mapping.get_arm_lengths import get_arm_lengths
 from src.mapping.map_to_robot_coordinates import get_scale_factors
 from src.sensing.extract_3D_points import (
@@ -78,7 +78,7 @@ class RobotModelPipeline(Pipeline):
                     )
 
                     # Make Reachy look at the person (potentially adjust for the robot's coordinate system)
-                    self.reachy.head.look_at(x=x, y=y, z=z, duration=0.1)
+                    self.reachy.head.look_at(x=x, y=y, z=z, duration=0.2)
 
                 # Draw pose landmarks if available
                 pose_results = self.pose.process(rgb_image)
@@ -98,7 +98,7 @@ class RobotModelPipeline(Pipeline):
                     break
 
                 # NOTE: The first move of the head might be very quick since it may move far (see example code in their docs)
-                time.sleep(0.1)
+                # time.sleep(0.1)
 
         except Exception as e:
             print(f"Head tracking error: {e}")
@@ -106,7 +106,7 @@ class RobotModelPipeline(Pipeline):
         finally:
             # TODO: Consider running this program in parallel with the arm tracking later
             if self.reachy:
-                self.reachy.turn_off(":head")
+                self.reachy.turn_off("reachy")
 
     def _demonstrate_stretching(self):
         print("Reachy, please demonstrate stretching your arms out.")
@@ -120,7 +120,8 @@ class RobotModelPipeline(Pipeline):
             self.reachy.r_arm.r_shoulder_pitch: 0,  # Forward horizontal position
             self.reachy.r_arm.r_shoulder_roll: 0,  # Neutral roll
             self.reachy.r_arm.r_arm_yaw: 0,  # Neutral yaw
-            self.reachy.r_arm.r_elbow_pitch: 0,  # Fully extended elbow (or slightly bent)
+            # Fully extended elbow (or slightly bent)
+            self.reachy.r_arm.r_elbow_pitch: 0,
             self.reachy.r_arm.r_forearm_yaw: 0,  # Neutral forearm
             self.reachy.r_arm.r_wrist_pitch: 0,  # Neutral wrist
             self.reachy.r_arm.r_wrist_roll: 0,  # Neutral wrist roll
@@ -130,7 +131,8 @@ class RobotModelPipeline(Pipeline):
             self.reachy.l_arm.l_shoulder_pitch: 0,  # Forward horizontal position
             self.reachy.l_arm.l_shoulder_roll: 0,  # Neutral roll
             self.reachy.l_arm.l_arm_yaw: 0,  # Neutral yaw
-            self.reachy.l_arm.l_elbow_pitch: 0,  # Fully extended elbow (or slightly bent)
+            # Fully extended elbow (or slightly bent)
+            self.reachy.l_arm.l_elbow_pitch: 0,
             self.reachy.l_arm.l_forearm_yaw: 0,  # Neutral forearm
             self.reachy.l_arm.l_wrist_pitch: 0,  # Neutral wrist
             self.reachy.l_arm.l_wrist_roll: 0,  # Neutral wrist roll
@@ -139,7 +141,8 @@ class RobotModelPipeline(Pipeline):
         # Move both arms to the stretched position simultaneously
         print("Stretching both arms simultaneously...")
         # Combine both position dictionaries to move both arms at once
-        stretch_position_both = {**stretch_position_right, **stretch_position_left}
+        stretch_position_both = {
+            **stretch_position_right, **stretch_position_left}
         goto(
             goal_positions=stretch_position_both,
             duration=2.0,
@@ -194,7 +197,8 @@ class RobotModelPipeline(Pipeline):
                         self.intrinsics,
                     )
                     if forearm_length is not None and upper_arm_length is not None:
-                        forearm_lengths = np.append(forearm_lengths, forearm_length)
+                        forearm_lengths = np.append(
+                            forearm_lengths, forearm_length)
                         upper_arm_lengths = np.append(
                             upper_arm_lengths, upper_arm_length
                         )

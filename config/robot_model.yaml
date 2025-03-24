@@ -12,7 +12,8 @@ reachy:
     hand:
       length: 0.075
       offset: 0.01
-    elbow_to_end_effector: 0.3575
+    elbow_to_end_effector:
+      length: 0.3575
 
   left_arm:
     upper_arm:
@@ -24,4 +25,5 @@ reachy:
     hand:
       length: 0.075
       offset: 0.01
-    elbow_to_end_effector: 0.3575
+    elbow_to_end_effector:
+      length: 0.3575
