@@ -14,7 +14,7 @@ from reachy_sdk.trajectory import goto
 from reachy_sdk.trajectory.interpolation import InterpolationMode
 
 
-class RobotModelPipeline(Pipeline):
+class Pipeline_one(Pipeline):
     """Approach 1: Uses robot arm model with IK
 
     Inherits from Pipeline with the following attributes:
@@ -77,8 +77,24 @@ class RobotModelPipeline(Pipeline):
                         2,
                     )
 
-                    # Make Reachy look at the person (potentially adjust for the robot's coordinate system)
-                    self.reachy.head.look_at(x=x, y=y, z=z, duration=0.2)
+                    # Make Reachy look at the person, gracefully handle unreachable positions
+                    try:
+                        self.reachy.head.look_at(x=x, y=y, z=z, duration=0.2)
+                    except Exception as e:
+                        # Log the error but continue tracking
+                        print(
+                            f"Warning: Could not track to position ({x:.2f}, {y:.2f}, {z:.2f}): {e}"
+                        )
+                        # Optional: add visual feedback about unreachable position
+                        cv2.putText(
+                            color_image,
+                            "Position unreachable",
+                            (10, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (0, 0, 255),  # Red color for warning
+                            2,
+                        )
 
                 # Draw pose landmarks if available
                 pose_results = self.pose.process(rgb_image)
@@ -141,8 +157,7 @@ class RobotModelPipeline(Pipeline):
         # Move both arms to the stretched position simultaneously
         print("Stretching both arms simultaneously...")
         # Combine both position dictionaries to move both arms at once
-        stretch_position_both = {
-            **stretch_position_right, **stretch_position_left}
+        stretch_position_both = {**stretch_position_right, **stretch_position_left}
         goto(
             goal_positions=stretch_position_both,
             duration=2.0,
@@ -197,8 +212,7 @@ class RobotModelPipeline(Pipeline):
                         self.intrinsics,
                     )
                     if forearm_length is not None and upper_arm_length is not None:
-                        forearm_lengths = np.append(
-                            forearm_lengths, forearm_length)
+                        forearm_lengths = np.append(forearm_lengths, forearm_length)
                         upper_arm_lengths = np.append(
                             upper_arm_lengths, upper_arm_length
                         )
