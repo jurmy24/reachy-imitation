@@ -231,8 +231,8 @@ class RobotModelPipeline(Pipeline):
             print(f"Failed to run the recognize human pipeline: {e}")
         finally:
             print("Measurement complete. Returning to rest position.")
-            # Turn off arms smoothly to prevent them from falling abruptly
             self.cleanup()
+            return hand_sf, elbow_sf
 
     def initiation_protocol(self):
         """Recognize the human in the frame and calculate the scale factors
@@ -249,8 +249,8 @@ class RobotModelPipeline(Pipeline):
             # Step 1: Track the human's head until they're in position
             self._watch_human()
 
-            # Step 2: Reachy demonstrates stretching out arms in front of the human
-            self._demonstrate_stretching()
+            # # Step 2: Reachy demonstrates stretching out arms in front of the human
+            # self._demonstrate_stretching()
 
         # Step 3: Human repeats the action and we calculate scale factors
         hand_sf, elbow_sf = self._calculate_scale_factors()
