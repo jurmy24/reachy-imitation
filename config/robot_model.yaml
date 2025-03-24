@@ -1,0 +1,29 @@
+# Reachy Robot Physical Dimensions Configuration
+# All measurements in meters unless otherwise specified
+
+reachy:
+  right_arm:
+    upper_arm:
+      length: 0.28
+    forearm:
+      length: 0.25
+    wrist:
+      length: 0.0325
+    hand:
+      length: 0.075
+      offset: 0.01
+    elbow_to_end_effector:
+      length: 0.3575
+
+  left_arm:
+    upper_arm:
+      length: 0.28
+    forearm:
+      length: 0.25
+    wrist:
+      length: 0.0325
+    hand:
+      length: 0.075
+      offset: 0.01
+    elbow_to_end_effector:
+      length: 0.3575
