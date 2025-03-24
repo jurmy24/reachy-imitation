@@ -18,7 +18,7 @@ class Pipeline_one(Pipeline):
     """Approach 1: Uses robot arm model with IK
 
     Inherits from Pipeline with the following attributes:
-    - reachy (ReachySDK)
+    - self.reachy (ReachySDK)
     - mp_hands (mediapipe.solutions.hands)
     - mp_pose (mediapipe.solutions.pose)
     - hands (mediapipe.solutions.hands.Hands)
@@ -29,7 +29,7 @@ class Pipeline_one(Pipeline):
 
     def _watch_human(self):
         """
-        Make Reachy's head track a human's head using the Realsense camera.
+        Make self.reachy's head track a human's head using the Realsense camera.
         This continues until a key is pressed (typically 'q') to signal the human
         is in position and ready for the next step.
         """
@@ -63,7 +63,7 @@ class Pipeline_one(Pipeline):
                     h,
                 )
 
-                # If head is detected, make reachy look at it
+                # If head is detected, make self.reachy look at it
                 if head_position is not None and not np.isnan(head_position).any():
                     x, y, z = head_position
                     # Display head position
@@ -77,7 +77,7 @@ class Pipeline_one(Pipeline):
                         2,
                     )
 
-                    # Make Reachy look at the person, gracefully handle unreachable positions
+                    # Make self.reachy look at the person, gracefully handle unreachable positions
                     try:
                         self.reachy.head.look_at(x=x, y=y, z=z, duration=0.2)
                     except Exception as e:
@@ -122,51 +122,69 @@ class Pipeline_one(Pipeline):
         finally:
             # TODO: Consider running this program in parallel with the arm tracking later
             if self.reachy:
-                self.reachy.turn_off("reachy")
+                self.reachy.head.look_at(0.5, 0, 0, duration=1)
+                self.reachy.turn_off_("head")
 
     def _demonstrate_stretching(self):
         print("Reachy, please demonstrate stretching your arms out.")
 
-        # Make sure arms are in stiff mode before moving
-        self.reachy.turn_on("r_arm")
-        self.reachy.turn_on("l_arm")
-
         # Define the stretched arm positions (arms extended forward)
-        stretch_position_right = {
-            self.reachy.r_arm.r_shoulder_pitch: 0,  # Forward horizontal position
-            self.reachy.r_arm.r_shoulder_roll: 0,  # Neutral roll
-            self.reachy.r_arm.r_arm_yaw: 0,  # Neutral yaw
-            # Fully extended elbow (or slightly bent)
-            self.reachy.r_arm.r_elbow_pitch: 0,
-            self.reachy.r_arm.r_forearm_yaw: 0,  # Neutral forearm
-            self.reachy.r_arm.r_wrist_pitch: 0,  # Neutral wrist
-            self.reachy.r_arm.r_wrist_roll: 0,  # Neutral wrist roll
+        angled_position = {
+            self.reachy.l_arm.l_shoulder_pitch: 0,
+            self.reachy.l_arm.l_shoulder_roll: 90,
+            self.reachy.l_arm.l_arm_yaw: 90,
+            self.reachy.l_arm.l_elbow_pitch: -90,
+            self.reachy.l_arm.l_forearm_yaw: 0,
+            self.reachy.l_arm.l_wrist_pitch: 0,
+            self.reachy.l_arm.l_wrist_roll: 0,
+            self.reachy.r_arm.r_shoulder_pitch: 0,
+            self.reachy.r_arm.r_shoulder_roll: -90,
+            self.reachy.r_arm.r_arm_yaw: -90,
+            self.reachy.r_arm.r_elbow_pitch: -90,
+            self.reachy.r_arm.r_forearm_yaw: 0,
+            self.reachy.r_arm.r_wrist_pitch: 0,
+            self.reachy.r_arm.r_wrist_roll: 0,
         }
-
-        stretch_position_left = {
-            self.reachy.l_arm.l_shoulder_pitch: 0,  # Forward horizontal position
-            self.reachy.l_arm.l_shoulder_roll: 0,  # Neutral roll
-            self.reachy.l_arm.l_arm_yaw: 0,  # Neutral yaw
-            # Fully extended elbow (or slightly bent)
+        zero_arm_position  = {
+            self.reachy.l_arm.l_shoulder_pitch: 0,
+            self.reachy.l_arm.l_shoulder_roll: 0,
+            self.reachy.l_arm.l_arm_yaw: 0,
             self.reachy.l_arm.l_elbow_pitch: 0,
-            self.reachy.l_arm.l_forearm_yaw: 0,  # Neutral forearm
-            self.reachy.l_arm.l_wrist_pitch: 0,  # Neutral wrist
-            self.reachy.l_arm.l_wrist_roll: 0,  # Neutral wrist roll
+            self.reachy.l_arm.l_forearm_yaw: 0,
+            self.reachy.l_arm.l_wrist_pitch: 0,
+            self.reachy.l_arm.l_wrist_roll: 0,
+            self.reachy.r_arm.r_shoulder_pitch: 0,
+            self.reachy.r_arm.r_shoulder_roll: 0,
+            self.reachy.r_arm.r_arm_yaw: 0,
+            self.reachy.r_arm.r_elbow_pitch: 0,
+            self.reachy.r_arm.r_forearm_yaw: 0,
+            self.reachy.r_arm.r_wrist_pitch: 0,
+            self.reachy.r_arm.r_wrist_roll: 0,
         }
-
-        # Move both arms to the stretched position simultaneously
-        print("Stretching both arms simultaneously...")
-        # Combine both position dictionaries to move both arms at once
-        stretch_position_both = {**stretch_position_right, **stretch_position_left}
         goto(
-            goal_positions=stretch_position_both,
+            goal_positions=angled_position,
             duration=2.0,
             interpolation_mode=InterpolationMode.MINIMUM_JERK,
         )
+        time.sleep(5.0)
+        goto(
+            goal_positions=zero_arm_position,
+            duration=2.0,
+            interpolation_mode=InterpolationMode.MINIMUM_JERK,
+        )
+        # Move both arms to the stretched position simultaneously
+        # print("Stretching both arms simultaneously...")
+        # # Combine both position dictionaries to move both arms at once
+        # stretch_position_both = {**stretch_position_right, **stretch_position_left}
+        # goto(
+        #     goal_positions=stretch_position_both,
+        #     duration=2.0,
+        #     interpolation_mode=InterpolationMode.MINIMUM_JERK,
+        # )
 
-        # Hold the position for a few seconds
-        print("Holding stretched position...")
-        time.sleep(3.0)
+        # # Hold the position for a few seconds
+        # print("Holding stretched position...")
+        # time.sleep(3.0)
 
         self.reachy.turn_off_smoothly("r_arm")
         self.reachy.turn_off_smoothly("l_arm")
@@ -256,9 +274,9 @@ class Pipeline_one(Pipeline):
         """Recognize the human in the frame and calculate the scale factors
 
         STEPS:
-        1. Reachy watches human entering the frame
-        2. Reachy's head is looking at the human until they get into position (we press a button on the keyboard to continue)
-        3. Reachy demonstrates stretching out arms in front of the human
+        1. self.reachy watches human entering the frame
+        2. self.reachy's head is looking at the human until they get into position (we press a button on the keyboard to continue)
+        3. self.reachy demonstrates stretching out arms in front of the human
         4. Human repeats the action and we calculate the scale factors
         """
         self.mp_draw = mp.solutions.drawing_utils
@@ -267,8 +285,8 @@ class Pipeline_one(Pipeline):
             # Step 1: Track the human's head until they're in position
             self._watch_human()
 
-            # # Step 2: Reachy demonstrates stretching out arms in front of the human
-            # self._demonstrate_stretching()
+            # # Step 2: self.reachy demonstrates stretching out arms in front of the human
+            self._demonstrate_stretching()
 
         # Step 3: Human repeats the action and we calculate scale factors
         hand_sf, elbow_sf = self._calculate_scale_factors()
