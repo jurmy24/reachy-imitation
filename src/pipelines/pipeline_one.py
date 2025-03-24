@@ -123,7 +123,7 @@ class Pipeline_one(Pipeline):
             # TODO: Consider running this program in parallel with the arm tracking later
             if self.reachy:
                 self.reachy.head.look_at(0.5, 0, 0, duration=1)
-                self.reachy.turn_off_("head")
+                self.reachy.turn_off_smoothly("head")
 
     def _demonstrate_stretching(self):
         print("Reachy, please demonstrate stretching your arms out.")
