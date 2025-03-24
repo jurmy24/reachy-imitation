@@ -1,5 +1,6 @@
 import sympy as sp
 import numpy as np
+from scipy.optimize import minimize
 
 
 def mattransfo(alpha, d, theta, r):
@@ -23,7 +24,6 @@ def compute_transformation_matrices(th, L):
     """
     Compute the transformation matrices for the robotic arm.
     """
-
     pi = sp.pi
     alpha = [0, -pi/2, -pi/2, -pi/2, +pi/2, -pi/2, -pi/2, - pi/2]
     d = [0, 0, 0, 0, 0, 0, -0.325, -0.01]
@@ -53,43 +53,39 @@ def forward_kinematics(th, L):
     """
     Calculate the end-effector position using forward kinematics.
     """
-
     T04, T08 = compute_transformation_matrices(th, L)
-    position_e = T04[0:3, 3]
-    position = T08[0:3, 3]
-    return np.array(position_e, dtype=np.float64).flatten(), np.array(position, dtype=np.float64).flatten()
+    position_e = np.array(T04[0:3, 3], dtype=np.float64).flatten()
+    position = np.array(T08[0:3, 3], dtype=np.float64).flatten()
+    return position_e, position
 
 
-def jacobian(th, L):
+def cost_function(th, desired_position, landmark_position, landmark_weight, L):
     """
-    Compute the Jacobian matrix of the forward kinematics.
+    Compute the cost function that includes end-effector and landmark position errors.
     """
-    _, pos = forward_kinematics(th, L)
-    J = np.zeros((3, len(th)))
+    # Compute the end-effector position
+    _, current_position = forward_kinematics(th, L)
+    end_effector_error = np.linalg.norm(desired_position - current_position)
 
-    epsilon = 1e-6
-    for i in range(len(th)):
-        th_epsilon = np.copy(th)
-        th_epsilon[i] += epsilon
-        _, pos_epsilon = forward_kinematics(th_epsilon, L)
-        J[:, i] = (pos_epsilon - pos) / epsilon
+    # Compute the landmark position
+    T04, _ = compute_transformation_matrices(th, L)
+    landmark_position_actual = np.array(
+        T04[0:3, 3], dtype=np.float64).flatten()
+    landmark_error = np.linalg.norm(
+        landmark_position_actual - landmark_position)
 
-    return J
+    # Compute the total cost
+    total_cost = end_effector_error + landmark_weight * landmark_error
+    return total_cost
 
 
-def inverse_kinematics(desired_position, initial_guess, L, tolerance=1e-6, max_iterations=100):
+def inverse_kinematics_with_landmark(desired_position, landmark_position, landmark_weight, initial_guess, L):
     """
-    Implement the Newton-Raphson method for inverse kinematics.
+    Implement the inverse kinematics with a single landmark using optimization.
     """
-    th = initial_guess
-    for _ in range(max_iterations):
-        current_position = forward_kinematics(th, L)[1]
-        error = desired_position - current_position
-        if np.linalg.norm(error) < tolerance:
-            break
-        J = jacobian(th, L)
-        th = th + np.linalg.pinv(J) @ error
-    return th
+    result = minimize(cost_function, initial_guess, args=(
+        desired_position, landmark_position, landmark_weight, L), method='Nelder-Mead')
+    return result.x
 
 
 # Desired end-effector position
@@ -101,7 +97,15 @@ initial_guess = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
 # Link lengths
 L = [0.19, 0.28]
 
-# Compute inverse kinematics
-joint_angles = inverse_kinematics(desired_position, initial_guess, L)
+# Single landmark position (example position)
+landmark_position = np.array([0.2, 0.2, 0.2])
+
+# Landmark weight (lower weight compared to the end-effector)
+landmark_weight = 0.1
+
+# Compute inverse kinematics with a single landmark
+joint_angles = inverse_kinematics_with_landmark(
+    desired_position, landmark_position, landmark_weight, initial_guess, L)
 print("Joint Angles:", joint_angles)
-print(forward_kinematics(joint_angles, L))
+print("Elbow-Effector Position:", forward_kinematics(joint_angles, L)[0])
+print("End-Effector Position:", forward_kinematics(joint_angles, L)[1])
