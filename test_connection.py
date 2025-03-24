@@ -15,7 +15,7 @@ for name, joint in reachy.joints.items():
 def test_bras_droit() -> None:
     right_angled_position = {
         reachy.r_arm.r_shoulder_pitch: 0,
-        reachy.r_arm.r_shoulder_roll: -30,
+        reachy.r_arm.r_shoulder_roll: 0,
         reachy.r_arm.r_arm_yaw: 0,
         reachy.r_arm.r_elbow_pitch: 0,
         reachy.r_arm.r_forearm_yaw: 0,

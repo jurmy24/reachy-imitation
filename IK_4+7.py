@@ -46,7 +46,7 @@ def compute_transformation_matrices(th, L):
     T06 = T05 * T56
     T07 = T06 * T67
     T08 = T07 * T78
-    return T08
+    return T04,T08
 
 
 def forward_kinematics(th, L):
@@ -54,24 +54,26 @@ def forward_kinematics(th, L):
     Calculate the end-effector position using forward kinematics.
     """
 
-    T08 = compute_transformation_matrices(th, L)
+    T04,T08 = compute_transformation_matrices(th, L)
+    position_e=T04[0:3, 3]
     position = T08[0:3, 3]
-    return np.array(position, dtype=np.float64).flatten()
+    return  np.array(position_e, dtype=np.float64).flatten(), np.array(position, dtype=np.float64).flatten()
 
 
 def jacobian(th, L):
     """
     Compute the Jacobian matrix of the forward kinematics.
     """
-    pos = forward_kinematics(th, L)
+    _, pos = forward_kinematics(th, L)
     J = np.zeros((3, len(th)))
 
     epsilon = 1e-6
     for i in range(len(th)):
         th_epsilon = np.copy(th)
         th_epsilon[i] += epsilon
-        pos_epsilon = forward_kinematics(th_epsilon, L)
+        _, pos_epsilon = forward_kinematics(th_epsilon, L)
         J[:, i] = (pos_epsilon - pos) / epsilon
+        
 
     return J
 
@@ -82,7 +84,7 @@ def inverse_kinematics(desired_position, initial_guess, L, tolerance=1e-6, max_i
     """
     th = initial_guess
     for _ in range(max_iterations):
-        current_position = forward_kinematics(th, L)
+        current_position = forward_kinematics(th, L)[1]
         error = desired_position - current_position
         if np.linalg.norm(error) < tolerance:
             break
