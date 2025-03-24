@@ -9,7 +9,38 @@ import cv2
 
 
 L_REACHY_UPPERARM = 0.28 # distance (m) from elbow to elbow
-L_REACHY_FOREARM = 0.25 + 0.0325 # distance (m) from elbow to wrist
+L_REACHY_FOREARM = 0.25 + 0.0325 + 0.075 # distance (m) from elbow to hand
+
+def average_landmarks(landmark1, landmark2):
+    """
+    Calculate the average of two landmarks.
+    
+    Args:
+        landmark1 (mp.framework.formats.landmark_pb2.NormalizedLandmark): The first landmark.
+        landmark2 (mp.framework.formats.landmark_pb2.NormalizedLandmark): The second landmark.
+    
+    Returns:
+        mp.framework.formats.landmark_pb2.NormalizedLandmark: The average landmark.
+    """
+    #avg_landmark = mp.framework.formats.landmark_pb2.NormalizedLandmark()
+    x = (landmark1.x + landmark2.x) / 2
+    y = (landmark1.y + landmark2.y) / 2
+    z = (landmark1.z + landmark2.z) / 2
+    return np.array([x, y, z])
+
+def get_3d_coordinates_of_hand(landmark, depth_frame, w, h, intrinsics):
+    cx, cy = int(landmark[0] * w), int(landmark[1] * h)
+    if 0 <= cx < w and 0 <= cy < h:
+        depth = depth_frame.get_distance(cx, cy)
+        if depth > 0:
+            fx, fy = intrinsics.fx, intrinsics.fy
+            ppx, ppy = intrinsics.ppx, intrinsics.ppy
+            x = (cx - ppx) * depth / fx
+            y = (cy - ppy) * depth / fy
+            #robot coordinate in comparison to camera coordinate: 
+            # xCr= -zc ,yr = - xc, zr = - yc
+            return np.array([-depth, x, -y]) # x was initially not negative 
+    return np.array([0, 0, 0])  # Valeur par défaut si aucune profondeur valide    
 
 
 def get_3d_coordinates(landmark, depth_frame, w, h, intrinsics):
@@ -23,14 +54,15 @@ def get_3d_coordinates(landmark, depth_frame, w, h, intrinsics):
             y = (cy - ppy) * depth / fy
             #robot coordinate in comparison to camera coordinate: 
             # xCr= -zc ,yr = - xc, zr = - yc
-            return np.array([-depth, -x, -y])
+            return np.array([-depth, x, -y]) # x was initially not negative 
     return np.array([0, 0, 0])  # Valeur par défaut si aucune profondeur valide
 
 def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
     required_landmarks = [
         mp_pose.PoseLandmark.RIGHT_ELBOW,
         mp_pose.PoseLandmark.RIGHT_SHOULDER,
-        mp_pose.PoseLandmark.RIGHT_WRIST
+        mp_pose.PoseLandmark.RIGHT_PINKY,
+        mp_pose.PoseLandmark.RIGHT_INDEX,
     ]
     for landmark in required_landmarks:
         if not (0.5 < pose_landmarks.landmark[landmark].visibility <= 1):
@@ -38,14 +70,14 @@ def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
         
     r_elbow = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_ELBOW]
     r_shoulder = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-    r_wrist = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_WRIST]
+    r_hand = average_landmarks(pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_PINKY], pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_INDEX])
 
     r_elbow_3d = get_3d_coordinates(r_elbow, depth_frame, w, h, intrinsics)
     r_shoulder_3d = get_3d_coordinates(r_shoulder, depth_frame, w, h, intrinsics)
-    r_wrist_3d = get_3d_coordinates(r_wrist, depth_frame, w, h, intrinsics)
+    r_hand_3d = get_3d_coordinates_of_hand(r_hand, depth_frame, w, h, intrinsics)
 
     forearm_length = np.linalg.norm(r_elbow_3d - r_shoulder_3d)
-    upper_length = np.linalg.norm(r_elbow_3d - r_wrist_3d)
+    upper_length = np.linalg.norm(r_elbow_3d - r_hand_3d)
     return forearm_length, upper_length
 
 def get_scale_factors(forearm_length, upper_length):
@@ -112,7 +144,7 @@ def test_scale_factors():
                             hand_sf, elbow_sf = get_scale_factors(forearm_length, upper_length)
                         cv2.putText(color_image, f'Forearm length: {forearm_length:.2f} m', (10, 70),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                        cv2.putText(color_image, f'Lower arm length: {upper_length:.2f} m', (10, 100),
+                        cv2.putText(color_image, f'Upper arm length: {upper_length:.2f} m', (10, 100),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                     else: 
                         cv2.putText(color_image, f'Mettez tout votre bras droit dans le cadre!', (10, 70),
@@ -120,13 +152,11 @@ def test_scale_factors():
             elif calculate_arm_lengths: 
                 cv2.putText(color_image, f'Mettez tout votre bras droit dans le cadre!', (10, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-
-                        
+                
             if not calculate_arm_lengths:                 
                 cv2.putText(color_image, f'Forearm length: {forearm_length:.2f} m w/ Hand SF = {hand_sf} ', (10, 70),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                cv2.putText(color_image, f'Lower arm length: {upper_length:.2f} m w/ Elbow SF = {elbow_sf}', (10, 100),
+                cv2.putText(color_image, f'Upper arm length: {upper_length:.2f} m w/ Elbow SF = {elbow_sf}', (10, 100),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             cv2.imshow("RealSense Right Arm Lengths", color_image)

@@ -3,10 +3,37 @@
 from reachy_sdk import ReachySDK
 from reachy_sdk.trajectory import goto
 from reachy_sdk.trajectory.interpolation import InterpolationMode
+import time
 
 # Remplacez '192.168.X.X' par l'adresse IP de Reachy
 reachy = ReachySDK(host="138.195.196.90")
 
+ZERO_RIGHT_POS = {
+    reachy.r_arm.r_shoulder_pitch: 0,
+    reachy.r_arm.r_shoulder_roll: 0,
+    reachy.r_arm.r_arm_yaw: 0,
+    reachy.r_arm.r_elbow_pitch: 0,
+    reachy.r_arm.r_forearm_yaw: 0,
+    reachy.r_arm.r_wrist_pitch: 0,
+    reachy.r_arm.r_wrist_roll: 0,
+}
+
+ZERO_BOTH = {
+    reachy.l_arm.l_shoulder_pitch: 0,
+    reachy.l_arm.l_shoulder_roll: 0,
+    reachy.l_arm.l_arm_yaw: 0,
+    reachy.l_arm.l_elbow_pitch: 0,
+    reachy.l_arm.l_forearm_yaw: 0,
+    reachy.l_arm.l_wrist_pitch: 0,
+    reachy.l_arm.l_wrist_roll: 0,
+    reachy.r_arm.r_shoulder_pitch: 0,
+    reachy.r_arm.r_shoulder_roll: 0,
+    reachy.r_arm.r_arm_yaw: 0,
+    reachy.r_arm.r_elbow_pitch: 0,
+    reachy.r_arm.r_forearm_yaw: 0,
+    reachy.r_arm.r_wrist_pitch: 0,
+    reachy.r_arm.r_wrist_roll: 0,
+}
 # Vérifiez si la connexion fonctionne
 for name, joint in reachy.joints.items():
     print(f'Joint "{name}" is at pos {joint.present_position} degree.')
@@ -15,17 +42,24 @@ for name, joint in reachy.joints.items():
 def test_bras_droit() -> None:
     right_angled_position = {
         reachy.r_arm.r_shoulder_pitch: 0,
-        reachy.r_arm.r_shoulder_roll: -30,
-        reachy.r_arm.r_arm_yaw: 0,
+        reachy.r_arm.r_shoulder_roll: -90,
+        reachy.r_arm.r_arm_yaw: -90,
         reachy.r_arm.r_elbow_pitch: 0,
         reachy.r_arm.r_forearm_yaw: 0,
         reachy.r_arm.r_wrist_pitch: 0,
         reachy.r_arm.r_wrist_roll: 0,
     }
+
     reachy.turn_on("r_arm")
     goto(
         goal_positions=right_angled_position,
         duration=1.0,
+        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+    )
+    time.sleep(1.0)
+    goto(
+        ZERO_RIGHT_POS,
+        duration=2.0,
         interpolation_mode=InterpolationMode.MINIMUM_JERK,
     )
 
@@ -49,15 +83,31 @@ def test_bras_gauche() -> None:
 def test_deux_bras() -> None:
     angled_position = {
         reachy.l_arm.l_shoulder_pitch: 0,
-        reachy.l_arm.l_shoulder_roll: 30,
-        reachy.l_arm.l_arm_yaw: 0,
+        reachy.l_arm.l_shoulder_roll: 90,
+        reachy.l_arm.l_arm_yaw: 90,
+        reachy.l_arm.l_elbow_pitch: -90,
+        reachy.l_arm.l_forearm_yaw: 0,
+        reachy.l_arm.l_wrist_pitch: 0,
+        reachy.l_arm.l_wrist_roll: 0,
+        reachy.r_arm.r_shoulder_pitch: 0,
+        reachy.r_arm.r_shoulder_roll: -90,
+        reachy.r_arm.r_arm_yaw: -90,
+        reachy.r_arm.r_elbow_pitch: -90,
+        reachy.r_arm.r_forearm_yaw: 0,
+        reachy.r_arm.r_wrist_pitch: 0,
+        reachy.r_arm.r_wrist_roll: 0,
+    }
+    strong_position = {
+        reachy.l_arm.l_shoulder_pitch: 0,
+        reachy.l_arm.l_shoulder_roll: 90,
+        reachy.l_arm.l_arm_yaw: 90,
         reachy.l_arm.l_elbow_pitch: 0,
         reachy.l_arm.l_forearm_yaw: 0,
         reachy.l_arm.l_wrist_pitch: 0,
         reachy.l_arm.l_wrist_roll: 0,
         reachy.r_arm.r_shoulder_pitch: 0,
-        reachy.r_arm.r_shoulder_roll: -30,
-        reachy.r_arm.r_arm_yaw: 0,
+        reachy.r_arm.r_shoulder_roll: -90,
+        reachy.r_arm.r_arm_yaw: -90,
         reachy.r_arm.r_elbow_pitch: 0,
         reachy.r_arm.r_forearm_yaw: 0,
         reachy.r_arm.r_wrist_pitch: 0,
@@ -67,15 +117,23 @@ def test_deux_bras() -> None:
     reachy.turn_on("r_arm")
     goto(
         goal_positions=angled_position,
-        duration=1.0,
+        duration=2.0,
+        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+    )
+    time.sleep(1.0)
+
+    goto(
+        goal_positions=ZERO_BOTH,
+        duration=2.0,
         interpolation_mode=InterpolationMode.MINIMUM_JERK,
     )
 
-
 if __name__ == "__main__":
-    test_bras_droit()
+    #test_bras_droit()
+
     #test_bras_gauche()
-    #test_deux_bras()
+    test_deux_bras()
 
     reachy.turn_off_smoothly("r_arm")
     reachy.turn_off_smoothly("l_arm")
+

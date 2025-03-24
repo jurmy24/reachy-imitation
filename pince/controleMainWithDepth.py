@@ -207,7 +207,8 @@ if __name__ == "__main__":
                     if certainty < HANDEDNESS_CERTAINTY_UPPER and previous_hand_type[index] != hand_type:
                         hand_type = "Unknown"
 
-                previous_hand_type[index] = hand_type
+                if (index <= 1):
+                    previous_hand_type[index] = hand_type
                 
 
                 """
@@ -228,7 +229,7 @@ if __name__ == "__main__":
                     text = f"Main {hand_type} ferme"
                     colour = (0, 0, 255)
                 """
-                print(hand_landmarks.landmark[0])
+                #print(hand_landmarks.landmark[0])
 
                 if is_hand_closed(hand_landmarks):
                     text = f"Main {hand_type} ferme"
