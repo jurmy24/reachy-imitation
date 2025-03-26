@@ -9,7 +9,7 @@ import cv2
 
 
 L_REACHY_UPPERARM = 0.28 # distance (m) from elbow to elbow
-L_REACHY_FOREARM = 0.25 + 0.0325 + 0.075 # distance (m) from elbow to hand
+L_REACHY_elbow_to_hand = 0.25 + 0.0325 + 0.075 # distance (m) from elbow to hand
 
 def average_landmarks(landmark1, landmark2):
     """
@@ -76,15 +76,15 @@ def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
     r_shoulder_3d = get_3d_coordinates(r_shoulder, depth_frame, w, h, intrinsics)
     r_hand_3d = get_3d_coordinates_of_hand(r_hand, depth_frame, w, h, intrinsics)
 
-    forearm_length = np.linalg.norm(r_elbow_3d - r_shoulder_3d)
-    upper_length = np.linalg.norm(r_elbow_3d - r_hand_3d)
-    return forearm_length, upper_length
+    upper_length = np.linalg.norm(r_elbow_3d - r_shoulder_3d)
+    elbow_to_hand_length = np.linalg.norm(r_elbow_3d - r_hand_3d)
+    return elbow_to_hand_length, upper_length
 
-def get_scale_factors(forearm_length, upper_length):
+def get_scale_factors(elbow_to_hand_length, upper_length):
     """
     Calculate the scale factors for the Reachy arm
     """
-    hand_sf = (L_REACHY_FOREARM+L_REACHY_UPPERARM) / (forearm_length+upper_length)
+    hand_sf = (L_REACHY_elbow_to_hand+L_REACHY_UPPERARM) / (elbow_to_hand_length+upper_length)
     elbow_sf = L_REACHY_UPPERARM / upper_length
     return hand_sf, elbow_sf
 
@@ -107,7 +107,7 @@ def test_scale_factors():
 
     align = rs.align(rs.stream.color)
 
-    forearm_lengths = np.array([])
+    elbow_to_hand_lengths = np.array([])
     upperarm_lengths = np.array([])
     calculate_arm_lengths = True
 
@@ -133,16 +133,16 @@ def test_scale_factors():
                 mp_draw.draw_landmarks(color_image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
                 if calculate_arm_lengths:
-                    forearm_length, upper_length = get_arm_lengths(pose_results.pose_landmarks, mp_pose, depth_frame, w, h, intrinsics)
-                    if forearm_length is not None and upper_length is not None:
-                        forearm_lengths = np.append(forearm_lengths, forearm_length)
+                    elbow_to_hand_length, upper_length = get_arm_lengths(pose_results.pose_landmarks, mp_pose, depth_frame, w, h, intrinsics)
+                    if elbow_to_hand_length is not None and upper_length is not None:
+                        elbow_to_hand_lengths = np.append(elbow_to_hand_lengths, elbow_to_hand_length)
                         upperarm_lengths = np.append(upperarm_lengths, upper_length)
-                        if len(forearm_lengths) > 100:
-                            forearm_length = np.median(forearm_lengths)
+                        if len(elbow_to_hand_lengths) > 1000:
+                            elbow_to_hand_length = np.median(elbow_to_hand_lengths)
                             upper_length = np.median(upperarm_lengths)
                             calculate_arm_lengths = False
-                            hand_sf, elbow_sf = get_scale_factors(forearm_length, upper_length)
-                        cv2.putText(color_image, f'Forearm length: {forearm_length:.2f} m', (10, 70),
+                            hand_sf, elbow_sf = get_scale_factors(elbow_to_hand_length, upper_length)
+                        cv2.putText(color_image, f'elbow_to_hand length: {elbow_to_hand_length:.2f} m', (10, 70),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                         cv2.putText(color_image, f'Upper arm length: {upper_length:.2f} m', (10, 100),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
@@ -154,7 +154,7 @@ def test_scale_factors():
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 
             if not calculate_arm_lengths:                 
-                cv2.putText(color_image, f'Forearm length: {forearm_length:.2f} m w/ Hand SF = {hand_sf} ', (10, 70),
+                cv2.putText(color_image, f'elbow_to_hand length: {elbow_to_hand_length:.2f} m w/ Hand SF = {hand_sf} ', (10, 70),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 cv2.putText(color_image, f'Upper arm length: {upper_length:.2f} m w/ Elbow SF = {elbow_sf}', (10, 100),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
