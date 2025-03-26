@@ -240,6 +240,7 @@ class Pipeline_one(Pipeline):
                             hand_sf, elbow_sf = get_scale_factors(
                                 forearm_length, upper_arm_length
                             )
+                            break
                         cv2.putText(
                             color_image,
                             f"Forearm length: {forearm_length:.2f} m",
@@ -281,14 +282,14 @@ class Pipeline_one(Pipeline):
         """
         self.mp_draw = mp.solutions.drawing_utils
 
-        if self.reachy:
-            # Step 1: Track the human's head until they're in position
-            self._watch_human()
+        # if self.reachy:
+        #     # Step 1: Track the human's head until they're in position
+        #     self._watch_human()
 
-            # # Step 2: self.reachy demonstrates stretching out arms in front of the human
-            self._demonstrate_stretching()
+        #     # # Step 2: self.reachy demonstrates stretching out arms in front of the human
+        #     self._demonstrate_stretching()
 
-        # Step 3: Human repeats the action and we calculate scale factors
+        # # Step 3: Human repeats the action and we calculate scale factors
         hand_sf, elbow_sf = self._calculate_scale_factors()
 
         return hand_sf, elbow_sf
