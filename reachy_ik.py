@@ -191,7 +191,7 @@ def test_reachy_ik(hand_sf):
                 #print(prev_reachy_wrist_right)
                 #print(reachy_wrist_right)
                 a = reachy.r_arm.forward_kinematics()
-                if not (np.allclose(prev_reachy_hand_right, reachy_hand_right, atol = 1e-2)):
+                if not (np.allclose(prev_reachy_hand_right, reachy_hand_right, atol = 0.05)):
                     prev_reachy_hand_right = reachy_hand_right
                     a[0,3] = reachy_hand_right[0]
                     a[1,3] = reachy_hand_right[1]
@@ -219,7 +219,7 @@ def test_reachy_ik(hand_sf):
                     # implement the go to code here
                     goto(
                         {joint: pos for joint,pos in list(zip(ordered_joint_names, joint_pos))},
-                        duration=3.0,
+                        duration=2.0,
                         interpolation_mode=InterpolationMode.MINIMUM_JERK,
                     )
             else:
