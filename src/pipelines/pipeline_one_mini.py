@@ -1,21 +1,24 @@
 import time
 from typing import Literal
-from config.CONSTANTS import get_zero_pos
+from src.models.ik_mini import (
+    scale_point,
+    transform_to_shoulder_origin,
+    translate_to_reachy_origin,
+    within_reachys_reach,
+)
 from src.pipelines.Pipeline import Pipeline
 from src.mapping.get_arm_lengths import get_arm_lengths
 from src.mapping.map_to_robot_coordinates import get_scale_factors
-from src.sensing.extract_3D_points import (
-    calculate_arm_coordinates,
-    get_head_coordinates,
-)
-import mediapipe as mp
+from src.sensing.extract_3D_points import get_head_coordinates
 import numpy as np
 import cv2
 from reachy_sdk.trajectory import goto, goto_async
 from reachy_sdk.trajectory.interpolation import InterpolationMode
+from config.CONSTANTS import get_zero_pos
+from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
 
 
-class Pipeline_one(Pipeline):
+class Pipeline_one_mini(Pipeline):
     """Approach 1: Uses robot arm model with IK
 
     Inherits from Pipeline with the following attributes:
@@ -114,12 +117,14 @@ class Pipeline_one(Pipeline):
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     cv2.destroyWindow("Head Tracking")
                     break
+
         except Exception as e:
             print(f"Head tracking error: {e}")
         finally:
             cv2.destroyAllWindows()
             # TODO: Consider running this program in parallel with the arm tracking later
-            self.reachy.head.look_at(0.5, 0, 0, duration=1)
+            if self.reachy:
+                self.reachy.head.look_at(0.5, 0, 0, duration=1)
 
     def _demonstrate_stretching(self):
         print("Reachy, please demonstrate stretching your arms out.")
@@ -236,8 +241,7 @@ class Pipeline_one(Pipeline):
         except Exception as e:
             print(f"Failed to run the recognize human pipeline: {e}")
         finally:
-            print("Measurement complete. Returning to rest position.")
-            self.cleanup()
+            print("Measurement complete.")
             self.hand_sf = hand_sf
             self.elbow_sf = elbow_sf
             return hand_sf, elbow_sf
@@ -246,9 +250,9 @@ class Pipeline_one(Pipeline):
         """Recognize the human in the frame and calculate the scale factors
 
         STEPS:
-        1. reachy watches human entering the frame
-        2. reachy's head is looking at the human until they get into position (we press a button on the keyboard to continue)
-        3. reachy demonstrates stretching out arms in front of the human
+        1. self.reachy watches human entering the frame
+        2. self.reachy's head is looking at the human until they get into position (we press a button on the keyboard to continue)
+        3. self.reachy demonstrates stretching out arms in front of the human
         4. Human repeats the action and we calculate the scale factors
         """
 
@@ -260,35 +264,7 @@ class Pipeline_one(Pipeline):
             self._demonstrate_stretching()
 
         # Step 3: Human repeats the action and we calculate scale factors
-        hand_sf, elbow_sf = self._calculate_scale_factors()
-
-        return hand_sf, elbow_sf
-
-    def process_frame(self, rgb_image, depth_frame, w, h, arm):
-        """Process a single frame and extract arm coordinates
-
-        Args:
-            rgb_image: RGB image from the RealSense camera
-            depth_frame: Depth frame from the RealSense camera
-            w: Width of the image
-            h: Height of the image
-            arm: Which arm to track ("right", "left", or "both")
-
-        Returns:
-            Tuple of (right_arm_coordinates, left_arm_coordinates)
-        """
-        return calculate_arm_coordinates(
-            self.pose,
-            self.hands,
-            self.mp_pose,
-            self.mp_hands,
-            self.intrinsics,
-            rgb_image,
-            depth_frame,
-            w,
-            h,
-            arm,
-        )
+        self._calculate_scale_factors()
 
     def display_frame(
         self, arm, color_image, right_arm_coordinates, left_arm_coordinates
@@ -337,11 +313,61 @@ class Pipeline_one(Pipeline):
         # Display the image
         cv2.imshow(window_title, color_image)
 
+    async def process_frame(
+        self,
+        rgb_image,
+        color_image,
+        depth_frame,
+        w,
+        h,
+        prev_right_joint_positions,
+        prev_left_joint_positions,
+        arm,
+    ):
+        """Process a single frame and extract arm coordinates
+
+        Args:
+            rgb_image: RGB image from the RealSense camera
+            color_image: Color image for display
+            depth_frame: Depth frame from the RealSense camera
+            w: Width of the image
+            h: Height of the image
+            prev_right_joint_positions: Previous joint positions for right arm (used as seed for IK)
+            prev_left_joint_positions: Previous joint positions for left arm (used as seed for IK)
+            arm: Which arm to track ("right", "left", or "both")
+
+        Returns:
+            Tuple of (right_arm_coordinates, left_arm_coordinates, reachy_joint_vector, updated_right_joint_positions, updated_left_joint_positions)
+        """
+        pass
+
     async def shadow(
         self, arm: Literal["right", "left", "both"] = "right", display: bool = True
     ):
+        """
+        Control Reachy to shadow human arm movements in real-time.
+
+        Args:
+            arm: Which arm to track ("right", "left", or "both")
+            display: Whether to display the video window with augmented visualization
+        """
         try:
+            # Initialize previous joint positions with None
+            # These will be populated on the first successful frame processing
+            prev_reachy_hand_right = self.reachy.r_arm.forward_kinematics()[0:3, 3]
+            prev_reachy_hand_left = self.reachy.l_arm.forward_kinematics()[0:3, 3]
+            i = 0
+            goto_new_position = False
+            pause_update = True
+
             while True:
+                i += 1
+                if i == 10:
+                    pause_update = False
+                    i = 0
+                else:
+                    pause_update = True
+
                 # Get frames from RealSense camera
                 frames = self.pipeline.wait_for_frames()
                 aligned_frames = self.align.process(frames)
@@ -358,27 +384,153 @@ class Pipeline_one(Pipeline):
 
                 # Get height and width of the color image
                 h, w, _ = color_image.shape
-                right_arm_coordinates, left_arm_coordinates, reachy_joint_vector = (
-                    self.process_frame(rgb_image, depth_frame, w, h, arm)
+
+                # Process the frame to get arm coordinates and joint positions
+                right_arm_coordinates = {}
+                left_arm_coordinates = {}
+                reachy_joint_vector = {}
+
+                pose_results = self.pose.process(rgb_image)
+
+                if not pose_results.pose_landmarks:
+                    print("No pose landmarks found")
+                    continue
+
+                # Get landmarks
+                landmarks = pose_results.pose_landmarks.landmark
+                self.mp_draw.draw_landmarks(
+                    color_image,
+                    pose_results.pose_landmarks,
+                    self.mp_pose.POSE_CONNECTIONS,
                 )
 
-                # Get reachy to move to this location
-                # TODO: Run this in a separate thread
-                if self.reachy:
-                    # Check how good goto_async is
-                    await goto_async(
-                        reachy_joint_vector,
-                        duration=1.0,
-                        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+                # Initialize joint position dictionaries for both arms
+                right_joint_dict = {}
+                left_joint_dict = {}
+
+                # Define arms to process based on the 'arm' parameter
+                arms_to_process = []
+                if arm == "right" or arm == "both":
+                    arms_to_process.append("right")
+                if arm == "left" or arm == "both":
+                    arms_to_process.append("left")
+
+                for current_arm in arms_to_process:
+                    # Select landmarks based on arm
+                    if current_arm == "right":
+                        shoulder_landmark = self.mp_pose.PoseLandmark.RIGHT_SHOULDER
+                        index_landmark = self.mp_pose.PoseLandmark.RIGHT_INDEX
+                        pinky_landmark = self.mp_pose.PoseLandmark.RIGHT_PINKY
+                        arm_coordinates = right_arm_coordinates
+                    else:  # left arm
+                        shoulder_landmark = self.mp_pose.PoseLandmark.LEFT_SHOULDER
+                        index_landmark = self.mp_pose.PoseLandmark.LEFT_INDEX
+                        pinky_landmark = self.mp_pose.PoseLandmark.LEFT_PINKY
+                        arm_coordinates = left_arm_coordinates
+
+                    # Get 3D coordinates (shared steps for both arms)
+                    shoulder = get_3D_coordinates(
+                        landmarks[shoulder_landmark],
+                        depth_frame,
+                        w,
+                        h,
+                        self.intrinsics,  # Todo: double check if intrinsics should be calculated each time
                     )
 
+                    # Get hand coordinates by averaging relevant finger landmarks
+                    hand = get_3D_coordinates_of_hand(
+                        landmarks[index_landmark],
+                        landmarks[pinky_landmark],
+                        depth_frame,
+                        w,
+                        h,
+                        self.intrinsics,
+                    )
+
+                    # Transform coordinates
+                    hand_rel_shoulder = transform_to_shoulder_origin(hand, shoulder)
+                    scaled_hand = scale_point(self.hand_sf, hand_rel_shoulder)
+                    reachy_hand = translate_to_reachy_origin(scaled_hand, current_arm)
+
+                    # Check if the hand is within reachy's reach (from the shoulder origin)
+                    if not within_reachys_reach(scaled_hand):
+                        print(
+                            f"WARNING: Reachy can't reach that position {scaled_hand}"
+                        )
+                        continue
+
+                    # # Store coordinates for display
+                    # arm_coordinates["shoulder"] = shoulder
+                    # arm_coordinates["hand"] = hand
+                    # arm_coordinates["hand_rel_shoulder"] = hand_rel_shoulder
+                    # arm_coordinates["reachy_hand"] = reachy_hand
+
+                    # Update the robot if needed
+                    if self.reachy:
+                        # Get current arm kinematics
+                        if current_arm == "right":
+                            a = self.reachy.r_arm.forward_kinematics()
+                            if not (
+                                np.allclose(
+                                    prev_reachy_hand_right, reachy_hand, atol=0.05
+                                )
+                            ):
+                                prev_reachy_hand_right = reachy_hand
+                                a[0, 3] = reachy_hand[0]
+                                a[1, 3] = reachy_hand[1]
+                                a[2, 3] = reachy_hand[2]
+                                # goto_new_position = True
+                            # else:
+                            # goto_new_position = False
+
+                            joint_pos = self.reachy.r_arm.inverse_kinematics(a)
+
+                            # Store joint positions in right arm dictionary
+                            for joint, pos in zip(
+                                self.ordered_joint_names_right, joint_pos
+                            ):
+                                right_joint_dict[joint] = pos
+
+                        else:  # left arm
+                            a = self.reachy.l_arm.forward_kinematics()
+                            if not (
+                                np.allclose(
+                                    prev_reachy_hand_left, reachy_hand, atol=0.05
+                                )
+                            ):
+                                prev_reachy_hand_left = reachy_hand
+                                a[0, 3] = reachy_hand[0]
+                                a[1, 3] = reachy_hand[1]
+                                a[2, 3] = reachy_hand[2]
+                                # goto_new_position = True
+                            # else:
+                            # goto_new_position = False
+
+                            joint_pos = self.reachy.l_arm.inverse_kinematics(a)
+
+                            # Store joint positions in left arm dictionary
+                            for joint, pos in zip(
+                                self.ordered_joint_names_left, joint_pos
+                            ):
+                                left_joint_dict[joint] = pos
+
+                # Combine joint dictionaries for both arms
+                combined_joint_dict = {**right_joint_dict, **left_joint_dict}
+
+                if not pause_update and combined_joint_dict:
+                    await goto_async(
+                        combined_joint_dict,
+                        duration=1,
+                        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+                    )
                 if display:
-                    # TODO: This display can run in a different thread
+                    # Display the tracking information
                     self.display_frame(
                         arm, color_image, right_arm_coordinates, left_arm_coordinates
                     )
+
                 # Quit if 'q' is pressed
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
-        finally:
-            self.cleanup()
+        except Exception as e:
+            print(f"Failed to run the shadow pipeline: {e}")

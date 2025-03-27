@@ -37,9 +37,11 @@ def main():
 
     # Run calibration if requested
     if args.calibrate or args.only_calibrate:
-        print("Running arm length calibration...")
-        hand_sf, elbow_sf = pipeline.initiation_protocol()
-        print(f"Calibration complete. Hand SF: {hand_sf}, Elbow SF: {elbow_sf}")
+        print("Running initiation protocol...")
+        pipeline.initiation_protocol()
+        print(
+            f"Calibration complete. Hand SF: {pipeline.hand_sf}, Elbow SF: {pipeline.elbow_sf}"
+        )
 
         # Exit early if only calibration was requested
         if args.only_calibrate:
@@ -48,6 +50,8 @@ def main():
     # Run the main pipeline
     print(f"Tracking {args.arm} arm(s)...")
     pipeline.run(arm=args.arm)
+
+    pipeline.cleanup()
 
     # Example on how to run:
     # python -m src.main --only-calibrate
