@@ -13,14 +13,16 @@ def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
         if not (0.5 < pose_landmarks.landmark[landmark].visibility <= 1):
             return None, None
 
-    r_elbow = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_ELBOW]
-    r_shoulder = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-    r_wrist = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_WRIST]
+    # r_elbow = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_ELBOW]
+    # r_shoulder = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER]
+    # r_wrist = pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_WRIST]
 
-    r_elbow_3d = get_3D_coordinates(r_elbow, depth_frame, w, h, intrinsics)
-    r_shoulder_3d = get_3D_coordinates(r_shoulder, depth_frame, w, h, intrinsics)
-    r_wrist_3d = get_3D_coordinates(r_wrist, depth_frame, w, h, intrinsics)
+    # r_elbow_3d = get_3D_coordinates(r_elbow, depth_frame, w, h, intrinsics)
+    # r_shoulder_3d = get_3D_coordinates(r_shoulder, depth_frame, w, h, intrinsics)
+    # r_wrist_3d = get_3D_coordinates(r_wrist, depth_frame, w, h, intrinsics)
 
-    upper_arm_length = np.linalg.norm(r_elbow_3d - r_shoulder_3d)
-    forearm_length = np.linalg.norm(r_elbow_3d - r_wrist_3d)
-    return forearm_length, upper_arm_length
+    # upper_arm_length = np.linalg.norm(r_elbow_3d - r_shoulder_3d)
+    # forearm_length = np.linalg.norm(r_elbow_3d - r_wrist_3d)
+    elbow_to_hand = 0.38
+    upperarm = 0.3
+    return elbow_to_hand, upperarm

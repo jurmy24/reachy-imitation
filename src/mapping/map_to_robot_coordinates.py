@@ -14,14 +14,14 @@ LEN_REACHY_ELBOW_TO_END_EFFECTOR = robot_config["reachy"]["right_arm"][
 ]["length"]
 
 
-def get_scale_factors(forearm_length, lower_length):
+def get_scale_factors(elbow_to_hand_length, upper_arm_length):
     """
     Calculate the scale factors for the Reachy arm
     """
     hand_sf = (LEN_REACHY_ELBOW_TO_END_EFFECTOR + LEN_REACHY_UPPERARM) / (
-        forearm_length + lower_length
+        elbow_to_hand_length + upper_arm_length
     )
-    elbow_sf = LEN_REACHY_UPPERARM / forearm_length
+    elbow_sf = LEN_REACHY_UPPERARM / upper_arm_length
     return hand_sf, elbow_sf
 
 
@@ -42,7 +42,7 @@ def test_scale_factors():
 
     align = rs.align(rs.stream.color)
 
-    forearm_lengths = np.array([])
+    elbow_to_hand_lengths = np.array([])
     upperarm_lengths = np.array([])
     calculate_arm_lengths = True
 
@@ -75,7 +75,7 @@ def test_scale_factors():
                 )
 
                 if calculate_arm_lengths:
-                    forearm_length, upper_length = get_arm_lengths(
+                    elbow_to_hand_length, upper_length = get_arm_lengths(
                         pose_results.pose_landmarks,
                         mp_pose,
                         depth_frame,
@@ -83,19 +83,19 @@ def test_scale_factors():
                         h,
                         intrinsics,
                     )
-                    if forearm_length is not None and upper_length is not None:
-                        forearm_lengths = np.append(forearm_lengths, forearm_length)
+                    if elbow_to_hand_length is not None and upper_length is not None:
+                        elbow_to_hand_lengths = np.append(elbow_to_hand_lengths, elbow_to_hand_length)
                         upperarm_lengths = np.append(upperarm_lengths, upper_length)
-                        if len(forearm_lengths) > 100:
-                            forearm_length = np.median(forearm_lengths)
+                        if len(elbow_to_hand_lengths) > 100:
+                            elbow_to_hand_length = np.median(elbow_to_hand_lengths)
                             upper_length = np.median(upperarm_lengths)
                             calculate_arm_lengths = False
                             hand_sf, elbow_sf = get_scale_factors(
-                                forearm_length, upper_length
+                                elbow_to_hand_length, upper_length
                             )
                         cv2.putText(
                             color_image,
-                            f"Forearm length: {forearm_length:.2f} m",
+                            f"Forearm length: {elbow_to_hand_length:.2f} m",
                             (10, 70),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
@@ -135,7 +135,7 @@ def test_scale_factors():
             if not calculate_arm_lengths:
                 cv2.putText(
                     color_image,
-                    f"Forearm length: {forearm_length:.2f} m w/ Hand SF = {hand_sf} ",
+                    f"Forearm length: {elbow_to_hand_length:.2f} m w/ Hand SF = {hand_sf} ",
                     (10, 70),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.7,
