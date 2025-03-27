@@ -1,12 +1,12 @@
 import argparse
 from reachy_sdk import ReachySDK
-from src.pipelines.pipeline_one import Pipeline_one
+from src.pipelines.pipeline_one_mini import Pipeline_one_mini
 
 # Create the overarching Reachy instance for this application
 reachy = ReachySDK(host="138.195.196.90")
 
 
-def main():
+async def main():
     # Create argument parser
     parser = argparse.ArgumentParser(description="Run Robot Imitation Pipeline")
 
@@ -33,7 +33,7 @@ def main():
     args = parser.parse_args()
 
     # Initialize pipeline
-    pipeline = Pipeline_one(reachy)
+    pipeline = Pipeline_one_mini(reachy)
 
     # Run calibration if requested
     if args.calibrate or args.only_calibrate:
@@ -49,7 +49,7 @@ def main():
 
     # Run the main pipeline
     print(f"Tracking {args.arm} arm(s)...")
-    pipeline.run(arm=args.arm)
+    await pipeline.shadow(arm=args.arm)
 
     pipeline.cleanup()
 
@@ -58,4 +58,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    
+    asyncio.run(main())

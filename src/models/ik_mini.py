@@ -1,24 +1,10 @@
 import numpy as np
-import math
-import mediapipe as mp
-import pyrealsense2 as rs
-import cv2
-from reachy_sdk.trajectory import goto, goto_async
-from reachy_sdk.trajectory.interpolation import InterpolationMode
-from src.mapping.map_to_robot_coordinates import get_scale_factors
 from config.CONSTANTS import (
     REACHY_R_SHOULDER_COORDINATES,
     REACHY_L_SHOULDER_COORDINATES,
     LEN_REACHY_ARM,
-    JOINT_NAMES,
-    get_zero_right_pos,
-    get_ordered_joint_names,
 )
-from src.utils.three_d import (
-    average_landmarks,
-    get_3D_coordinates,
-    get_3D_coordinates_of_hand,
-)
+
 
 
 def transform_to_shoulder_origin(point, right_shoulder):

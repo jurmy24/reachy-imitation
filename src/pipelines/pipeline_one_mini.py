@@ -453,11 +453,11 @@ class Pipeline_one_mini(Pipeline):
                     reachy_hand = translate_to_reachy_origin(scaled_hand, current_arm)
 
                     # Check if the hand is within reachy's reach (from the shoulder origin)
-                    if not within_reachys_reach(scaled_hand):
-                        print(
-                            f"WARNING: Reachy can't reach that position {scaled_hand}"
-                        )
-                        continue
+                    # if not within_reachys_reach(scaled_hand):
+                    #     print(
+                    #         f"WARNING: Reachy can't reach that position {scaled_hand}"
+                    #     )
+                    #     continue
 
                     # # Store coordinates for display
                     # arm_coordinates["shoulder"] = shoulder
