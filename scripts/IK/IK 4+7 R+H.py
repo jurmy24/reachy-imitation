@@ -31,7 +31,7 @@ def compute_transformation_matrices(joint_angles, L):
         r = np.array([0, 0, -L[1], 0, -L[2], 0, 0, -L[3]])
         th = [joint_angles[0], joint_angles[1]-pi/2, joint_angles[2] - pi/2, joint_angles[3],
               joint_angles[4], joint_angles[5] - pi/2, joint_angles[6] - pi/2, - pi/2]
-        Tbase0 = mattransfo(-pi/2, 0, -pi/2, 0.19)
+        Tbase0 = mattransfo(-pi/2, 0, -pi/2, -0.19)
     if L[1] == "human":
         alpha = [0, -pi/2, -pi/2, -pi/2, +pi/2, -pi/2, -pi/2, - pi/2]
         d = [0, 0, 0, 0, 0, 0, 0, 0]
@@ -90,7 +90,7 @@ def cost_function(joint_angles, hand_position, elbow_position, elbow_weight, L):
     return total_cost
 
 
-def inverse_kinematics(hand_position, elbow_position,initial_guess, elbow_weight=0.1,  L=["reachy", 0.28, 0.25, 0.075]):
+def inverse_kinematics(hand_position, elbow_position, initial_guess, elbow_weight=0.1,  L=["reachy", 0.28, 0.25, 0.075]):
     """
     Implement the inverse kinematics.
     """
@@ -105,6 +105,7 @@ def inverse_kinematics(hand_position, elbow_position,initial_guess, elbow_weight
 
 
 if __name__ == "__main__":
+
     # Desired hand position
     hand_position = np.array([0.3, 0.2, 0.1])
 
@@ -115,7 +116,7 @@ if __name__ == "__main__":
     # Initial guess for joint angles
     initial_guess = np.array([0.1, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1])
 
-    #If you use reachy or human
+    # If you use reachy or human
     L = ["reachy", 0.28, 0.25, 0.075]
 
     joint_angles = inverse_kinematics(

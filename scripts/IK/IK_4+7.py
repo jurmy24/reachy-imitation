@@ -13,7 +13,7 @@ def mattransfo(alpha, d, theta, r):
         [ca*st, ca*ct, -sa, -r*sa],
         [sa*st, sa*ct, ca, r*ca],
         [0, 0, 0, 1]
-    ], dtype=np.float64)
+    ], dtype=np.float64)  
 
 
 def compute_transformation_matrices(th):
