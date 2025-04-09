@@ -16,6 +16,7 @@ from reachy_sdk.trajectory import goto, goto_async
 from reachy_sdk.trajectory.interpolation import InterpolationMode
 from config.CONSTANTS import get_zero_pos
 from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
+import asyncio
 
 
 class Pipeline_one_mini(Pipeline):
@@ -523,6 +524,14 @@ class Pipeline_one_mini(Pipeline):
                         duration=1,
                         interpolation_mode=InterpolationMode.MINIMUM_JERK,
                     )
+                    # Alternatively, use shorter duration and don't await completion
+                    # duration = 0.1  # 100ms movements
+                    # asyncio.create_task(goto_async(
+                    #     combined_joint_dict, 
+                    #     duration=duration,
+                    #     sampling_freq=100,  # Higher sampling frequency
+                    #     interpolation_mode=InterpolationMode.MINIMUM_JERK
+                    # ))
                 if display:
                     # Display the tracking information
                     self.display_frame(
