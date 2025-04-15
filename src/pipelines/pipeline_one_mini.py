@@ -434,6 +434,7 @@ class Pipeline_one_mini(Pipeline):
 
                     # Skip if any coordinate is invalid
                     if shoulder is None or hand is None:
+                        await asyncio.sleep(0.01)  # Short sleep to prevent CPU hogging
                         continue
 
                     # Transform coordinates to robot space
