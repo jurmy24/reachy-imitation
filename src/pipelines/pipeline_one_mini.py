@@ -22,22 +22,26 @@ import asyncio
 class Pipeline_one_mini(Pipeline):
     """Approach 1: Uses robot arm model with IK
 
-    Inherits from Pipeline with the following attributes:
-    - self.reachy (ReachySDK)
-    - mp_hands (mediapipe.solutions.hands)
-    - mp_pose (mediapipe.solutions.pose)
-    - hands (mediapipe.solutions.hands.Hands)
-    - pose (mediapipe.solutions.pose.Pose)
-    - pipeline (pyrealsense2.pipeline)
-    - intrinsics (pyrealsense2.intrinsics)
-    # Plus a few more we just added
+    Inherits from Pipeline:
+        self.reachy = reachy
+        self.mp_hands = None
+        self.mp_pose = None
+        self.hands = None
+        self.pose = None
+        self.pipeline = None
+        self.align = None
+        self.intrinsics = None
+        self.mp_draw = None
+        self.hand_sf = None  # scale factor for shoulder to hand length ratio between robot and human (i.e. robot/human)
+        self.elbow_sf = None  # scale factor for shoulder to elbow length ratio between robot and human (i.e. robot/human)
+        self.zero_arm_position = get_zero_pos(self.reachy)
+        self.ordered_joint_names_right = get_ordered_joint_names(self.reachy, "right")
+        self.ordered_joint_names_left = get_ordered_joint_names(self.reachy, "left")
     """
 
     def _watch_human(self):
         """
         Make self.reachy's head track a human's head using the Realsense camera.
-        This continues until a key is pressed (typically 'q') to signal the human
-        is in position and ready for the next step.
         """
         print("Starting head tracking. Press 'q' to continue when in position.")
 
@@ -123,12 +127,11 @@ class Pipeline_one_mini(Pipeline):
             print(f"Head tracking error: {e}")
         finally:
             cv2.destroyAllWindows()
-            # TODO: Consider running this program in parallel with the arm tracking later
             if self.reachy:
                 self.reachy.head.look_at(0.5, 0, 0, duration=1)
 
     def _demonstrate_stretching(self):
-        print("Reachy, please demonstrate stretching your arms out.")
+        print("Initiate demonstration of strong man pose")
 
         # Define the strong man pose
         strong_man_pose = {
@@ -165,12 +168,13 @@ class Pipeline_one_mini(Pipeline):
             print(f"Failed to demonstrate stretching: {e}")
 
     def _calculate_scale_factors(self):
-        # Initialize arrays to store arm length measurements
+        """
+        Calculate the scale factors for the robot's arm length to human arm length.
+        """
         forearm_lengths = np.array([])
         upper_arm_lengths = np.array([])
 
         try:
-            print("Human, please stretch your arms out in front of you.")
             time.sleep(2.0)
 
             while True:
@@ -251,20 +255,13 @@ class Pipeline_one_mini(Pipeline):
         """Recognize the human in the frame and calculate the scale factors
 
         STEPS:
-        1. self.reachy watches human entering the frame
-        2. self.reachy's head is looking at the human until they get into position (we press a button on the keyboard to continue)
-        3. self.reachy demonstrates stretching out arms in front of the human
-        4. Human repeats the action and we calculate the scale factors
+        1. reachy watches human entering the frame
+        2. we press q to continue once the human is in position
+        3. reachy demonstrates stretching out arms in front of the human
+        4. human repeats the action and we calculate the scale factors
         """
-
-        if self.reachy:
-            # Step 1: Track the human's head until they're in position
-            self._watch_human()
-
-            # Step 2: self.reachy demonstrates stretching out arms in front of the human
-            self._demonstrate_stretching()
-
-        # Step 3: Human repeats the action and we calculate scale factors
+        self._watch_human()
+        self._demonstrate_stretching()
         self._calculate_scale_factors()
 
     def display_frame(
@@ -314,34 +311,6 @@ class Pipeline_one_mini(Pipeline):
         # Display the image
         cv2.imshow(window_title, color_image)
 
-    async def process_frame(
-        self,
-        rgb_image,
-        color_image,
-        depth_frame,
-        w,
-        h,
-        prev_right_joint_positions,
-        prev_left_joint_positions,
-        arm,
-    ):
-        """Process a single frame and extract arm coordinates
-
-        Args:
-            rgb_image: RGB image from the RealSense camera
-            color_image: Color image for display
-            depth_frame: Depth frame from the RealSense camera
-            w: Width of the image
-            h: Height of the image
-            prev_right_joint_positions: Previous joint positions for right arm (used as seed for IK)
-            prev_left_joint_positions: Previous joint positions for left arm (used as seed for IK)
-            arm: Which arm to track ("right", "left", or "both")
-
-        Returns:
-            Tuple of (right_arm_coordinates, left_arm_coordinates, reachy_joint_vector, updated_right_joint_positions, updated_left_joint_positions)
-        """
-        pass
-
     async def shadow(
         self, arm: Literal["right", "left", "both"] = "right", display: bool = True
     ):
@@ -357,17 +326,11 @@ class Pipeline_one_mini(Pipeline):
             # These will be populated on the first successful frame processing
             prev_reachy_hand_right = self.reachy.r_arm.forward_kinematics()[0:3, 3]
             prev_reachy_hand_left = self.reachy.l_arm.forward_kinematics()[0:3, 3]
-            i = 0
-            goto_new_position = False
-            pause_update = True
+
+            # Task tracking for movement commands
+            previous_movement_task = None
 
             while True:
-                i += 1
-                if i == 10:
-                    pause_update = False
-                    i = 0
-                else:
-                    pause_update = True
 
                 # Get frames from RealSense camera
                 frames = self.pipeline.wait_for_frames()
@@ -435,7 +398,7 @@ class Pipeline_one_mini(Pipeline):
                         depth_frame,
                         w,
                         h,
-                        self.intrinsics,  # Todo: double check if intrinsics should be calculated each time
+                        self.intrinsics,
                     )
 
                     # Get hand coordinates by averaging relevant finger landmarks
@@ -480,9 +443,6 @@ class Pipeline_one_mini(Pipeline):
                                 a[0, 3] = reachy_hand[0]
                                 a[1, 3] = reachy_hand[1]
                                 a[2, 3] = reachy_hand[2]
-                                # goto_new_position = True
-                            # else:
-                            # goto_new_position = False
 
                             joint_pos = self.reachy.r_arm.inverse_kinematics(a)
 
@@ -503,9 +463,6 @@ class Pipeline_one_mini(Pipeline):
                                 a[0, 3] = reachy_hand[0]
                                 a[1, 3] = reachy_hand[1]
                                 a[2, 3] = reachy_hand[2]
-                                # goto_new_position = True
-                            # else:
-                            # goto_new_position = False
 
                             joint_pos = self.reachy.l_arm.inverse_kinematics(a)
 
@@ -518,20 +475,26 @@ class Pipeline_one_mini(Pipeline):
                 # Combine joint dictionaries for both arms
                 combined_joint_dict = {**right_joint_dict, **left_joint_dict}
 
-                if not pause_update and combined_joint_dict:
-                    await goto_async(
-                        combined_joint_dict,
-                        duration=1,
-                        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+                # Update the robot if there is a new position
+                # TODO: use the kalman filter or allclose to check if its worth sending a new position
+                if combined_joint_dict:
+                    current_task = asyncio.create_task(
+                        goto_async(
+                            combined_joint_dict,
+                            duration=0.2,
+                            interpolation_mode=InterpolationMode.MINIMUM_JERK,
+                        )
                     )
-                    # Alternatively, use shorter duration and don't await completion
-                    # duration = 0.1  # 100ms movements
-                    # asyncio.create_task(goto_async(
-                    #     combined_joint_dict, 
-                    #     duration=duration,
-                    #     sampling_freq=100,  # Higher sampling frequency
-                    #     interpolation_mode=InterpolationMode.MINIMUM_JERK
-                    # ))
+
+                    # Cancel previous task if it's still running
+                    if previous_movement_task and not previous_movement_task.done():
+                        try:
+                            previous_movement_task.cancel()
+                        except Exception as e:
+                            print(f"Failed to cancel previous task: {e}")
+
+                    previous_movement_task = current_task
+
                 if display:
                     # Display the tracking information
                     self.display_frame(

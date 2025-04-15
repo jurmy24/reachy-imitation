@@ -1,63 +1,46 @@
 import argparse
 from reachy_sdk import ReachySDK
+from src.mapping.map_to_robot_coordinates import get_scale_factors
 from src.pipelines.pipeline_one_mini import Pipeline_one_mini
+from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 
 # Create the overarching Reachy instance for this application
 reachy = ReachySDK(host="138.195.196.90")
 
 
 async def main():
-    # Create argument parser
-    parser = argparse.ArgumentParser(description="Run Robot Imitation Pipeline")
-
-    # Add arguments
-    parser.add_argument(
-        "--arm",
-        type=str,
-        choices=["right", "left", "both"],
-        default="right",
-        help="Which arm(s) to track (default: right)",
-    )
-    parser.add_argument(
-        "--calibrate",
-        action="store_true",
-        help="Run arm length calibration before tracking",
-    )
-    parser.add_argument(
-        "--only-calibrate",
-        action="store_true",
-        help="Run only arm length calibration without tracking",
-    )
-
-    # Parse arguments
-    args = parser.parse_args()
+    calibrate = False
+    arm = "right"
 
     # Initialize pipeline
     pipeline = Pipeline_one_mini(reachy)
 
     # Run calibration if requested
-    if args.calibrate or args.only_calibrate:
+    if calibrate:
         print("Running initiation protocol...")
         pipeline.initiation_protocol()
         print(
             f"Calibration complete. Hand SF: {pipeline.hand_sf}, Elbow SF: {pipeline.elbow_sf}"
         )
-
-        # Exit early if only calibration was requested
-        if args.only_calibrate:
-            return
+    else:
+        print("Using default scale factors")
+        hand_sf, elbow_sf = get_scale_factors(
+            HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
+        )
+        pipeline.hand_sf = hand_sf
+        pipeline.elbow_sf = elbow_sf
 
     # Run the main pipeline
-    print(f"Tracking {args.arm} arm(s)...")
-    await pipeline.shadow(arm=args.arm)
+    print(f"Tracking {arm} arm(s)...")
+    await pipeline.shadow(arm=arm, display=False)
 
     pipeline.cleanup()
 
     # Example on how to run:
-    # python -m src.main --only-calibrate
+    # python -m src.main
 
 
 if __name__ == "__main__":
     import asyncio
-    
+
     asyncio.run(main())

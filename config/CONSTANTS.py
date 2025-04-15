@@ -11,6 +11,10 @@ LEN_REACHY_ARM = LEN_REACHY_ELBOW_TO_END_EFFECTOR + LEN_REACHY_UPPERARM
 REACHY_R_SHOULDER_COORDINATES = np.array([0, -0.19, 0])
 REACHY_L_SHOULDER_COORDINATES = np.array([0, 0.19, 0])
 
+# Default values for human arm lengths
+HUMAN_ELBOW_TO_HAND_DEFAULT = 0.38
+HUMAN_UPPERARM_DEFAULT = 0.3
+
 # Camera to Reachy Coordinates Transformation
 CAMERA_TO_REACHY_Z = 0.35  # camera is 35cm above Reachy's origin
 CAMERA_TO_REACHY_X = -0.18  # camera is 18cm behind Reachy's origin

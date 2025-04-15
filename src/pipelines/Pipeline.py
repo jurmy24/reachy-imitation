@@ -78,16 +78,6 @@ class Pipeline(ABC):
         pass
 
     @abstractmethod
-    def process_frame(self, **kwargs):
-        """Process a single frame of input data"""
-        pass
-
-    @abstractmethod
-    def display_frame(self, **kwargs):
-        """Display the processed frame with visualization options"""
-        pass
-
-    @abstractmethod
     def shadow(
         self, arm: Literal["right", "left", "both"] = "right", display: bool = True
     ):
