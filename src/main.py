@@ -32,7 +32,7 @@ async def main():
 
     # Run the main pipeline
     print(f"Tracking {arm} arm(s)...")
-    await pipeline.shadow(arm=arm, display=False)
+    pipeline.shadow(arm=arm, display=False)
 
     pipeline.cleanup()
 
