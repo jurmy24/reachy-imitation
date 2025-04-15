@@ -344,7 +344,8 @@ class Pipeline_one_mini(Pipeline):
             prev_left_joint_pos = joint_positions.get("left", {})
 
             # For frame rate and movement control
-            last_movement_time = time.time()
+            last_movement_time_right = time.time()
+            last_movement_time_left = time.time()
             movement_interval = 0.03  # Send commands at ~30Hz
 
             # Initialize dictionaries that will store the final joint positions to apply
@@ -466,16 +467,25 @@ class Pipeline_one_mini(Pipeline):
                             + (1 - position_alpha) * prev_reachy_hand_right
                         )
 
-                        # Only update if position changed significantly
+
+                        # Check if the desired position is different to where it's currently at  
+                        a = self.reachy.r_arm.forward_kinematics()
+                        current_pos = np.array([a[0, 3], a[1, 3], a[2, 3]])
+                        if np.allclose(current_pos, smoothed_position, atol=0.03):
+                            right_already_there = True
+                        else:
+                            right_already_there = False
+
+                        # Only update if position changed significantly from the previous count
                         if not np.allclose(
                             prev_reachy_hand_right, smoothed_position, atol=0.02
-                        ):
+                        ) and not right_already_there:
                             # Update previous position
                             prev_reachy_hand_right = smoothed_position
 
                             # Compute IK
                             try:
-                                a = self.reachy.r_arm.forward_kinematics()
+                                #a = self.reachy.r_arm.forward_kinematics()
                                 a[0, 3] = smoothed_position[0]
                                 a[1, 3] = smoothed_position[1]
                                 a[2, 3] = smoothed_position[2]
@@ -609,16 +619,24 @@ class Pipeline_one_mini(Pipeline):
                             + (1 - position_alpha) * prev_reachy_hand_left
                         )
 
+                        # Check if the desired position is different to where it's currently at  
+                        a = self.reachy.r_arm.forward_kinematics()
+                        current_pos = np.array([a[0, 3], a[1, 3], a[2, 3]])
+                        if np.allclose(current_pos, smoothed_position, atol=0.03):
+                            left_already_there = True
+                        else:
+                            left_already_there = False
+
                         # Only update if position changed significantly
                         if not np.allclose(
                             prev_reachy_hand_left, smoothed_position, atol=0.02
-                        ):
+                        ) and not left_already_there:
                             # Update previous position
                             prev_reachy_hand_left = smoothed_position
 
                             # Compute IK
                             try:
-                                a = self.reachy.l_arm.forward_kinematics()
+                                #a = self.reachy.l_arm.forward_kinematics()
                                 a[0, 3] = smoothed_position[0]
                                 a[1, 3] = smoothed_position[1]
                                 a[2, 3] = smoothed_position[2]
@@ -743,8 +761,8 @@ class Pipeline_one_mini(Pipeline):
 
                 # Apply goal positions directly at controlled rate
                 current_time = time.time()
-                if current_time - last_movement_time >= movement_interval:
-                    last_movement_time = current_time
+                if current_time - last_movement_time_right >= movement_interval and not right_already_there:
+                    last_movement_right_time = current_time
 
                     # Apply right arm joint positions if any
                     for joint_name, position in right_joint_dict.items():
@@ -772,7 +790,9 @@ class Pipeline_one_mini(Pipeline):
                                 self.reachy.r_arm.r_gripper.goal_position = position
                         except Exception as e:
                             print(f"Error setting position for {joint_name}: {e}")
-
+                
+                if current_time - last_movement_time_left >= movement_interval and not left_already_there:
+                    last_movement_left_time = current_time
                     # Apply left arm joint positions if any
                     for joint_name, position in left_joint_dict.items():
                         try:

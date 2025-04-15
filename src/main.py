@@ -8,9 +8,19 @@ from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 reachy = ReachySDK(host="138.195.196.90")
 
 
+ordered_joint_names = [
+    reachy.r_arm.r_shoulder_pitch,
+    reachy.r_arm.r_shoulder_roll,
+    reachy.r_arm.r_arm_yaw,
+    reachy.r_arm.r_elbow_pitch,
+    reachy.r_arm.r_forearm_yaw,
+    reachy.r_arm.r_wrist_pitch,
+    reachy.r_arm.r_wrist_roll
+]
+
 async def main():
     calibrate = False
-    arm = "right"
+    arm = "both"
 
     # Initialize pipeline
     pipeline = Pipeline_one_mini(reachy)
@@ -32,7 +42,7 @@ async def main():
 
     # Run the main pipeline
     print(f"Tracking {arm} arm(s)...")
-    pipeline.shadow(arm=arm, display=False)
+    await pipeline.shadow(arm=arm, display=False)
 
     pipeline.cleanup()
 
