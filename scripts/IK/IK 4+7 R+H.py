@@ -114,9 +114,11 @@ if __name__ == "__main__":
     elbow_weight = 0.1
 
     # Initial guess for joint angles
+    # you should use previous position if you have one
     initial_guess = np.array([0.1, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1])
 
     # If you use reachy or human
+    # L = ['who', lenght between shoulder and elbow, length between elbow and wrist, lenght between wrist and center of the hand]
     L = ["reachy", 0.28, 0.25, 0.075]
 
     joint_angles = inverse_kinematics(
