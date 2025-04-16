@@ -4,6 +4,10 @@ import mediapipe as mp
 import pyrealsense2 as rs
 import cv2
 from reachy_sdk import ReachySDK
+from reachy_sdk.trajectory import goto
+from reachy_sdk.trajectory.interpolation import InterpolationMode
+
+from config.CONSTANTS import get_ordered_joint_names, get_zero_pos
 
 
 class Pipeline(ABC):
@@ -20,6 +24,12 @@ class Pipeline(ABC):
         self.align = None
         self.intrinsics = None
         self.mp_draw = None
+        self.hand_sf = None  # scale factor for shoulder to hand length ratio between robot and human (i.e. robot/human)
+        self.elbow_sf = None  # scale factor for shoulder to elbow length ratio between robot and human (i.e. robot/human)
+        self.zero_arm_position = get_zero_pos(self.reachy)
+        self.ordered_joint_names_right = get_ordered_joint_names(self.reachy, "right")
+        self.ordered_joint_names_left = get_ordered_joint_names(self.reachy, "left")
+
         self.initialize()
 
     def initialize(self):
@@ -56,6 +66,8 @@ class Pipeline(ABC):
             .get_intrinsics()
         )
 
+        self.mp_draw = mp.solutions.drawing_utils
+
         # NOTE: This turns on the entire Reachy robot (i.e. head and both arms on stiff mode)
         if self.reachy is not None:
             self.reachy.turn_on("reachy")
@@ -66,17 +78,7 @@ class Pipeline(ABC):
         pass
 
     @abstractmethod
-    def process_frame(self, **kwargs):
-        """Process a single frame of input data"""
-        pass
-
-    @abstractmethod
-    def display_frame(self, **kwargs):
-        """Display the processed frame with visualization options"""
-        pass
-
-    @abstractmethod
-    def run(
+    def shadow(
         self, arm: Literal["right", "left", "both"] = "right", display: bool = True
     ):
         pass
@@ -85,5 +87,14 @@ class Pipeline(ABC):
         """Clean up resources - subclasses can override if needed"""
         self.pipeline.stop()
         cv2.destroyAllWindows()
+
         if self.reachy is not None:
-            self.reachy.turn_off_smoothly("reachy")
+            try:
+                goto(
+                    goal_positions=self.zero_arm_position,
+                    duration=2.0,
+                    interpolation_mode=InterpolationMode.MINIMUM_JERK,
+                )
+                self.reachy.head.look_at(0.5, 0, 0, duration=2.0)
+            finally:
+                self.reachy.turn_off_smoothly("reachy")

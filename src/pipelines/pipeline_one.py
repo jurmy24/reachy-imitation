@@ -1,5 +1,6 @@
 import time
 from typing import Literal
+from config.CONSTANTS import get_zero_pos
 from src.pipelines.Pipeline import Pipeline
 from src.mapping.get_arm_lengths import get_arm_lengths
 from src.mapping.map_to_robot_coordinates import get_scale_factors
@@ -10,7 +11,7 @@ from src.sensing.extract_3D_points import (
 import mediapipe as mp
 import numpy as np
 import cv2
-from reachy_sdk.trajectory import goto
+from reachy_sdk.trajectory import goto, goto_async
 from reachy_sdk.trajectory.interpolation import InterpolationMode
 
 
@@ -25,6 +26,7 @@ class Pipeline_one(Pipeline):
     - pose (mediapipe.solutions.pose.Pose)
     - pipeline (pyrealsense2.pipeline)
     - intrinsics (pyrealsense2.intrinsics)
+    # Plus a few more we just added
     """
 
     def _watch_human(self):
@@ -112,24 +114,18 @@ class Pipeline_one(Pipeline):
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     cv2.destroyWindow("Head Tracking")
                     break
-
-                # NOTE: The first move of the head might be very quick since it may move far (see example code in their docs)
-                # time.sleep(0.1)
-
         except Exception as e:
             print(f"Head tracking error: {e}")
-            cv2.destroyAllWindows()
         finally:
+            cv2.destroyAllWindows()
             # TODO: Consider running this program in parallel with the arm tracking later
-            if self.reachy:
-                self.reachy.head.look_at(0.5, 0, 0, duration=1)
-                self.reachy.turn_off_smoothly("head")
+            self.reachy.head.look_at(0.5, 0, 0, duration=1)
 
     def _demonstrate_stretching(self):
         print("Reachy, please demonstrate stretching your arms out.")
 
-        # Define the stretched arm positions (arms extended forward)
-        angled_position = {
+        # Define the strong man pose
+        strong_man_pose = {
             self.reachy.l_arm.l_shoulder_pitch: 0,
             self.reachy.l_arm.l_shoulder_roll: 90,
             self.reachy.l_arm.l_arm_yaw: 90,
@@ -145,49 +141,22 @@ class Pipeline_one(Pipeline):
             self.reachy.r_arm.r_wrist_pitch: 0,
             self.reachy.r_arm.r_wrist_roll: 0,
         }
-        zero_arm_position  = {
-            self.reachy.l_arm.l_shoulder_pitch: 0,
-            self.reachy.l_arm.l_shoulder_roll: 0,
-            self.reachy.l_arm.l_arm_yaw: 0,
-            self.reachy.l_arm.l_elbow_pitch: 0,
-            self.reachy.l_arm.l_forearm_yaw: 0,
-            self.reachy.l_arm.l_wrist_pitch: 0,
-            self.reachy.l_arm.l_wrist_roll: 0,
-            self.reachy.r_arm.r_shoulder_pitch: 0,
-            self.reachy.r_arm.r_shoulder_roll: 0,
-            self.reachy.r_arm.r_arm_yaw: 0,
-            self.reachy.r_arm.r_elbow_pitch: 0,
-            self.reachy.r_arm.r_forearm_yaw: 0,
-            self.reachy.r_arm.r_wrist_pitch: 0,
-            self.reachy.r_arm.r_wrist_roll: 0,
-        }
-        goto(
-            goal_positions=angled_position,
-            duration=2.0,
-            interpolation_mode=InterpolationMode.MINIMUM_JERK,
-        )
-        time.sleep(5.0)
-        goto(
-            goal_positions=zero_arm_position,
-            duration=2.0,
-            interpolation_mode=InterpolationMode.MINIMUM_JERK,
-        )
-        # Move both arms to the stretched position simultaneously
-        # print("Stretching both arms simultaneously...")
-        # # Combine both position dictionaries to move both arms at once
-        # stretch_position_both = {**stretch_position_right, **stretch_position_left}
-        # goto(
-        #     goal_positions=stretch_position_both,
-        #     duration=2.0,
-        #     interpolation_mode=InterpolationMode.MINIMUM_JERK,
-        # )
+        zero_arm_position = get_zero_pos(self.reachy)
 
-        # # Hold the position for a few seconds
-        # print("Holding stretched position...")
-        # time.sleep(3.0)
-
-        self.reachy.turn_off_smoothly("r_arm")
-        self.reachy.turn_off_smoothly("l_arm")
+        try:
+            goto(
+                goal_positions=strong_man_pose,
+                duration=2.0,
+                interpolation_mode=InterpolationMode.MINIMUM_JERK,
+            )
+            time.sleep(5.0)
+            goto(
+                goal_positions=zero_arm_position,
+                duration=2.0,
+                interpolation_mode=InterpolationMode.MINIMUM_JERK,
+            )
+        except Exception as e:
+            print(f"Failed to demonstrate stretching: {e}")
 
     def _calculate_scale_factors(self):
         # Initialize arrays to store arm length measurements
@@ -269,27 +238,28 @@ class Pipeline_one(Pipeline):
         finally:
             print("Measurement complete. Returning to rest position.")
             self.cleanup()
+            self.hand_sf = hand_sf
+            self.elbow_sf = elbow_sf
             return hand_sf, elbow_sf
 
     def initiation_protocol(self):
         """Recognize the human in the frame and calculate the scale factors
 
         STEPS:
-        1. self.reachy watches human entering the frame
-        2. self.reachy's head is looking at the human until they get into position (we press a button on the keyboard to continue)
-        3. self.reachy demonstrates stretching out arms in front of the human
+        1. reachy watches human entering the frame
+        2. reachy's head is looking at the human until they get into position (we press a button on the keyboard to continue)
+        3. reachy demonstrates stretching out arms in front of the human
         4. Human repeats the action and we calculate the scale factors
         """
-        self.mp_draw = mp.solutions.drawing_utils
 
-        # if self.reachy:
-        #     # Step 1: Track the human's head until they're in position
-        #     self._watch_human()
+        if self.reachy:
+            # Step 1: Track the human's head until they're in position
+            self._watch_human()
 
-        #     # # Step 2: self.reachy demonstrates stretching out arms in front of the human
-        #     self._demonstrate_stretching()
+            # Step 2: self.reachy demonstrates stretching out arms in front of the human
+            self._demonstrate_stretching()
 
-        # # Step 3: Human repeats the action and we calculate scale factors
+        # Step 3: Human repeats the action and we calculate scale factors
         hand_sf, elbow_sf = self._calculate_scale_factors()
 
         return hand_sf, elbow_sf
@@ -367,11 +337,9 @@ class Pipeline_one(Pipeline):
         # Display the image
         cv2.imshow(window_title, color_image)
 
-    def run(
+    async def shadow(
         self, arm: Literal["right", "left", "both"] = "right", display: bool = True
     ):
-        """Main processing loop - may be overridden by subclasses if needed"""
-        self.initialize()
         try:
             while True:
                 # Get frames from RealSense camera
@@ -390,9 +358,19 @@ class Pipeline_one(Pipeline):
 
                 # Get height and width of the color image
                 h, w, _ = color_image.shape
-                right_arm_coordinates, left_arm_coordinates = self.process_frame(
-                    rgb_image, depth_frame, w, h, arm
+                right_arm_coordinates, left_arm_coordinates, reachy_joint_vector = (
+                    self.process_frame(rgb_image, depth_frame, w, h, arm)
                 )
+
+                # Get reachy to move to this location
+                # TODO: Run this in a separate thread
+                if self.reachy:
+                    # Check how good goto_async is
+                    await goto_async(
+                        reachy_joint_vector,
+                        duration=1.0,
+                        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+                    )
 
                 if display:
                     # TODO: This display can run in a different thread

@@ -1,5 +1,6 @@
 from src.utils.three_d import get_3D_coordinates
 import numpy as np
+from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 
 
 def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
@@ -23,6 +24,6 @@ def get_arm_lengths(pose_landmarks, mp_pose, depth_frame, w, h, intrinsics):
 
     # upper_arm_length = np.linalg.norm(r_elbow_3d - r_shoulder_3d)
     # forearm_length = np.linalg.norm(r_elbow_3d - r_wrist_3d)
-    elbow_to_hand = 0.38
-    upperarm = 0.3
+    elbow_to_hand = HUMAN_ELBOW_TO_HAND_DEFAULT
+    upperarm = HUMAN_UPPERARM_DEFAULT
     return elbow_to_hand, upperarm
