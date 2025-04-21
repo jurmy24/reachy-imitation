@@ -72,8 +72,9 @@ def test_deux_bras() -> None:
     )
 
 
+
 if __name__ == "__main__":
-    test_bras_droit()
+    #test_bras_droit()
     #test_bras_gauche()
     #test_deux_bras()
 

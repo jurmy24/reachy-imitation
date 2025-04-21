@@ -1,60 +1,56 @@
 import argparse
 from reachy_sdk import ReachySDK
-from src.pipelines.RobotModelPipeline import RobotModelPipeline
+from src.mapping.map_to_robot_coordinates import get_scale_factors
+from src.pipelines.pipeline_one_mini import Pipeline_one_mini
+from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 
 # Create the overarching Reachy instance for this application
 reachy = ReachySDK(host="138.195.196.90")
 
 
-def main():
-    # Create argument parser
-    parser = argparse.ArgumentParser(
-        description="Run Robot Imitation Pipeline")
+ordered_joint_names = [
+    reachy.r_arm.r_shoulder_pitch,
+    reachy.r_arm.r_shoulder_roll,
+    reachy.r_arm.r_arm_yaw,
+    reachy.r_arm.r_elbow_pitch,
+    reachy.r_arm.r_forearm_yaw,
+    reachy.r_arm.r_wrist_pitch,
+    reachy.r_arm.r_wrist_roll
+]
 
-    # Add arguments
-    parser.add_argument(
-        "--arm",
-        type=str,
-        choices=["right", "left", "both"],
-        default="right",
-        help="Which arm(s) to track (default: right)",
-    )
-    parser.add_argument(
-        "--calibrate",
-        action="store_true",
-        help="Run arm length calibration before tracking",
-    )
-    parser.add_argument(
-        "--only-calibrate",
-        action="store_true",
-        help="Run only arm length calibration without tracking",
-    )
-
-    # Parse arguments
-    args = parser.parse_args()
+async def main():
+    calibrate = False
+    arm = "both"
 
     # Initialize pipeline
-    pipeline = RobotModelPipeline(reachy)
+    pipeline = Pipeline_one_mini(reachy)
 
     # Run calibration if requested
-    if args.calibrate or args.only_calibrate:
-        print("Running arm length calibration...")
-        hand_sf, elbow_sf = pipeline.initiation_protocol()
+    if calibrate:
+        print("Running initiation protocol...")
+        pipeline.initiation_protocol()
         print(
-            f"Calibration complete. Hand SF: {hand_sf}, Elbow SF: {elbow_sf}")
-
-        # Exit early if only calibration was requested
-        if args.only_calibrate:
-            return
+            f"Calibration complete. Hand SF: {pipeline.hand_sf}, Elbow SF: {pipeline.elbow_sf}"
+        )
+    else:
+        print("Using default scale factors")
+        hand_sf, elbow_sf = get_scale_factors(
+            HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
+        )
+        pipeline.hand_sf = hand_sf
+        pipeline.elbow_sf = elbow_sf
 
     # Run the main pipeline
-    print(f"Tracking {args.arm} arm(s)...")
-    pipeline.run(arm=args.arm)
+    print(f"Tracking {arm} arm(s)...")
+    await pipeline.shadow(arm=arm, display=False)
+
+    pipeline.cleanup()
 
     # Example on how to run:
-    # python -m src.main --only-calibrate
-    
+    # python -m src.main
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+
+    asyncio.run(main())

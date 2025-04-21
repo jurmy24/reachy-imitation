@@ -11,12 +11,14 @@ def mattransfo(alpha, d, theta, r):
     ca = sp.cos(alpha)
     sa = sp.sin(alpha)
 
-    return sp.Matrix([
-        [ct, -st, 0, d],
-        [ca*st, ca*ct, -sa, -r*sa],
-        [sa*st, sa*ct, ca, r*ca],
-        [0, 0, 0, 1]
-    ])
+    return sp.Matrix(
+        [
+            [ct, -st, 0, d],
+            [ca * st, ca * ct, -sa, -r * sa],
+            [sa * st, sa * ct, ca, r * ca],
+            [0, 0, 0, 1],
+        ]
+    )
 
 
 def compute_transformation_matrices(th, L):
@@ -25,19 +27,19 @@ def compute_transformation_matrices(th, L):
     """
 
     pi = sp.pi
-    alpha = [0, -pi/2, -pi/2, -pi/2, +pi/2, -pi/2, -pi/2, - pi/2]
+    alpha = [0, -pi / 2, -pi / 2, -pi / 2, +pi / 2, -pi / 2, -pi / 2, -pi / 2]
     d = [0, 0, 0, 0, 0, 0, -0.325, -0.01]
     r = np.array([0, 0, -L[1], 0, -0.25, 0, 0, -0.075])
 
-    Tbase0 = mattransfo(-pi/2, 0, -pi/2, L[0])
+    Tbase0 = mattransfo(-pi / 2, 0, -pi / 2, L[0])
     T01 = Tbase0 * mattransfo(alpha[0], d[0], th[0], r[0])
-    T12 = mattransfo(alpha[1], d[1], th[1] - pi/2, r[1])
-    T23 = mattransfo(alpha[2], d[2], th[2] - pi/2, r[2])
+    T12 = mattransfo(alpha[1], d[1], th[1] - pi / 2, r[1])
+    T23 = mattransfo(alpha[2], d[2], th[2] - pi / 2, r[2])
     T34 = mattransfo(alpha[3], d[3], th[3], r[3])
     T45 = mattransfo(alpha[4], d[4], th[4], r[4])
-    T56 = mattransfo(alpha[5], d[5], th[5] - pi/2, r[5])
-    T67 = mattransfo(alpha[6], d[6], th[6] - pi/2, r[6])
-    T78 = mattransfo(alpha[7], d[7], - pi/2, r[7])
+    T56 = mattransfo(alpha[5], d[5], th[5] - pi / 2, r[5])
+    T67 = mattransfo(alpha[6], d[6], th[6] - pi / 2, r[6])
+    T78 = mattransfo(alpha[7], d[7], -pi / 2, r[7])
 
     T02 = T01 * T12
     T03 = T02 * T23
@@ -76,7 +78,9 @@ def jacobian(th, L):
     return J
 
 
-def inverse_kinematics(desired_position, initial_guess, L, tolerance=1e-6, max_iterations=100):
+def inverse_kinematics(
+    desired_position, initial_guess, L, tolerance=1e-6, max_iterations=100
+):
     """
     Implement the Newton-Raphson method for inverse kinematics.
     """
