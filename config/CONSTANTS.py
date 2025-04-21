@@ -19,50 +19,41 @@ HUMAN_UPPERARM_DEFAULT = 0.3
 CAMERA_TO_REACHY_Z = 0.35  # camera is 35cm above Reachy's origin
 CAMERA_TO_REACHY_X = -0.18  # camera is 18cm behind Reachy's origin
 
-JOINT_NAMES = [
-    "shoulder pitch",
-    "shoulder roll",
-    "arm yaw",
-    "elbow pitch",
-    "forearm yaw",
-    "wrist pitch",
-    "wrist roll",
-]
 
+def get_zero_pos(reachy, arm="both"):
+    """Generate the zero position dictionary for the specified arm based on a reachy instance."""
+    if arm not in ["right", "left", "both"]:
+        raise ValueError("Invalid arm")
 
-# Functions to generate reachy-dependent constants
-def get_zero_right_pos(reachy):
-    """Generate the zero position dictionary for the right arm based on a reachy instance."""
-    return {
-        reachy.r_arm.r_shoulder_pitch: 0,
-        reachy.r_arm.r_shoulder_roll: 0,
-        reachy.r_arm.r_arm_yaw: 0,
-        reachy.r_arm.r_elbow_pitch: 0,
-        reachy.r_arm.r_forearm_yaw: 0,
-        reachy.r_arm.r_wrist_pitch: 0,
-        reachy.r_arm.r_wrist_roll: 0,
-    }
+    zero_pos = {}
 
+    if arm == "right" or arm == "both":
+        zero_pos.update(
+            {
+                reachy.r_arm.r_shoulder_pitch: 0,
+                reachy.r_arm.r_shoulder_roll: 0,
+                reachy.r_arm.r_arm_yaw: 0,
+                reachy.r_arm.r_elbow_pitch: 0,
+                reachy.r_arm.r_forearm_yaw: 0,
+                reachy.r_arm.r_wrist_pitch: 0,
+                reachy.r_arm.r_wrist_roll: 0,
+            }
+        )
 
-def get_zero_left_pos(reachy):
-    """Generate the zero position dictionary for the left arm based on a reachy instance."""
-    return {
-        reachy.l_arm.l_shoulder_pitch: 0,
-        reachy.l_arm.l_shoulder_roll: 0,
-        reachy.l_arm.l_arm_yaw: 0,
-        reachy.l_arm.l_elbow_pitch: 0,
-        reachy.l_arm.l_forearm_yaw: 0,
-        reachy.l_arm.l_wrist_pitch: 0,
-        reachy.l_arm.l_wrist_roll: 0,
-    }
+    if arm == "left" or arm == "both":
+        zero_pos.update(
+            {
+                reachy.l_arm.l_shoulder_pitch: 0,
+                reachy.l_arm.l_shoulder_roll: 0,
+                reachy.l_arm.l_arm_yaw: 0,
+                reachy.l_arm.l_elbow_pitch: 0,
+                reachy.l_arm.l_forearm_yaw: 0,
+                reachy.l_arm.l_wrist_pitch: 0,
+                reachy.l_arm.l_wrist_roll: 0,
+            }
+        )
 
-
-def get_zero_pos(reachy):
-    """Generate the zero position dictionary for both arms based on a reachy instance."""
-    return {
-        **get_zero_right_pos(reachy),
-        **get_zero_left_pos(reachy),
-    }
+    return zero_pos
 
 
 # TODO: check if this one is necessary
