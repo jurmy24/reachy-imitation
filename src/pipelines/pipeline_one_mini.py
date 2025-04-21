@@ -49,19 +49,11 @@ class Pipeline_one_mini(Pipeline):
         try:
             while True:
                 # Get frames from RealSense camera
-                frames = self.pipeline.wait_for_frames()
-                aligned_frames = self.align.process(frames)
-                color_frame = aligned_frames.get_color_frame()
-                depth_frame = aligned_frames.get_depth_frame()
-
-                # Check if frames are valid
-                if not color_frame or not depth_frame:
+                camera_data = self._get_camera_data()
+                if camera_data is None:
                     continue
 
-                # Process the image
-                color_image = np.asanyarray(color_frame.get_data())
-                rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-                h, w, _ = color_image.shape
+                color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
                 # Get the head coordinates
                 head_position = get_head_coordinates(
@@ -179,18 +171,12 @@ class Pipeline_one_mini(Pipeline):
             time.sleep(2.0)
 
             while True:
-                frames = self.pipeline.wait_for_frames()
-                aligned_frames = self.align.process(frames)
-                color_frame = aligned_frames.get_color_frame()
-                depth_frame = aligned_frames.get_depth_frame()
-
-                if not color_frame or not depth_frame:
+                # Get frames from RealSense camera
+                camera_data = self._get_camera_data()
+                if camera_data is None:
                     continue
 
-                color_image = np.asanyarray(color_frame.get_data())
-                rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-
-                h, w, _ = color_image.shape
+                color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
                 pose_results = self.pose.process(rgb_image)
                 if pose_results.pose_landmarks:
@@ -266,8 +252,21 @@ class Pipeline_one_mini(Pipeline):
         self._calculate_scale_factors()
 
     def display_frame(
-        self, arm, color_image, right_arm_coordinates, left_arm_coordinates
+        self,
+        arm,
+        color_image,
+        right_arm_coordinates,
+        left_arm_coordinates,
+        pose_landmarks=None,
     ):
+        # Display landmarks on the image
+        if pose_landmarks:
+            self.mp_draw.draw_landmarks(
+                color_image,
+                pose_landmarks,
+                self.mp_pose.POSE_CONNECTIONS,
+            )
+
         # Display 3D coordinates on the image
         y_offset = 30
 
@@ -312,6 +311,29 @@ class Pipeline_one_mini(Pipeline):
         # Display the image
         cv2.imshow(window_title, color_image)
 
+    def _get_camera_data(self):
+        """Get frames from RealSense camera with validity check.
+
+        Returns:
+            tuple: (color_frame, depth_frame, color_image, rgb_image, h, w) if valid
+                   None if frames are invalid
+        """
+        frames = self.pipeline.wait_for_frames()
+        aligned_frames = self.align.process(frames)
+        color_frame = aligned_frames.get_color_frame()
+        depth_frame = aligned_frames.get_depth_frame()
+
+        # Check if frames are valid
+        if not color_frame or not depth_frame:
+            return None
+
+        # Process the color image
+        color_image = np.asanyarray(color_frame.get_data())
+        rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+        h, w, _ = color_image.shape
+
+        return color_frame, depth_frame, color_image, rgb_image, h, w
+
     async def shadow(
         self, arm: Literal["right", "left", "both"] = "right", display: bool = True
     ):
@@ -320,97 +342,80 @@ class Pipeline_one_mini(Pipeline):
 
         Args:
             arm: Which arm to track ("right", "left", or "both")
-            display: Whether to display the video window with augmented visualization
+            display: Whether to display the video window in the computer's monitor
         """
+        ############### Parameters ###############
+        smoothing_buffer_size = 5
+        right_position_history = []
+        left_position_history = []
+        position_alpha = 0.4  # For EMA position smoothing
+        movement_interval = 0.03  # Send commands at ~30Hz
+        ########################################
+
+        ############### FLAGS ##################
+        cleanup_requested = False
+        ########################################
+
+        ############### VARIABLES ##############
+        right_joint_dict = {}
+        left_joint_dict = {}
+        ########################################
+
         try:
-            setup_torque_limits(self.reachy, 70.0, arm)
+            # Set torque limits for all motor joints for safety
+            setup_torque_limits(self.reachy, 80.0, arm)
 
-            # Position and velocity smoothing parameters
-            smoothing_buffer_size = 5
-            right_position_history = []
-            left_position_history = []
-            # velocity_alpha = 0.3  # For EMA velocity smoothing
-            position_alpha = 0.4  # For EMA position smoothing
-
-            # Get initial positions directly
-            prev_reachy_hand_right = self.reachy.r_arm.forward_kinematics()[0:3, 3]
-            prev_reachy_hand_left = self.reachy.l_arm.forward_kinematics()[0:3, 3]
-
-            # Get the initial joint positions using the utility function
-            joint_positions = get_joint_positions(self.reachy, arm)
-
-            # Extract the right and left joint positions
-            prev_right_joint_pos = joint_positions.get("right", {})
-            prev_left_joint_pos = joint_positions.get("left", {})
+            # Get initial coordinates and joint positions for the specified arm(s)
+            prev_reachy_hand_right = (
+                self.reachy.r_arm.forward_kinematics()[0:3, 3]
+                if arm in ["right", "both"]
+                else None
+            )
+            prev_reachy_hand_left = (
+                self.reachy.l_arm.forward_kinematics()[0:3, 3]
+                if arm in ["left", "both"]
+                else None
+            )
+            prev_right_joint_pos, prev_left_joint_pos = get_joint_positions(
+                self.reachy, arm
+            )
 
             # For frame rate and movement control
             last_movement_time_right = time.time()
             last_movement_time_left = time.time()
-            movement_interval = 0.03  # Send commands at ~30Hz
 
-            # Initialize dictionaries that will store the final joint positions to apply
-            right_joint_dict = {}
-            left_joint_dict = {}
-
-            # For handling graceful shutdown
-            cleanup_requested = False
-
-            print(
-                "Starting direct control with goal_position. Press 'q' to exit safely."
-            )
+            print("Starting shadowing. Press 'q' to exit safely.")
 
             while not cleanup_requested:
                 loop_start_time = time.time()
 
-                # Get frames from RealSense camera
-                frames = self.pipeline.wait_for_frames()
-                aligned_frames = self.align.process(frames)
-                color_frame = aligned_frames.get_color_frame()
-                depth_frame = aligned_frames.get_depth_frame()
-
-                # Check if frames are valid
-                if not color_frame or not depth_frame:
+                # 1. get data from RealSense camera
+                camera_data = self._get_camera_data()
+                if camera_data is None:
+                    await asyncio.sleep(0.01)
                     continue
-
-                # Process the color image
-                color_image = np.asanyarray(color_frame.get_data())
-                rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-                h, w, _ = color_image.shape
+                color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
                 # Coordinate storage for visualization
                 right_arm_coordinates = {}
                 left_arm_coordinates = {}
 
-                # Process pose landmarks
+                # 2. get pose landmarks from the image using mediapipe
                 pose_results = self.pose.process(rgb_image)
                 if not pose_results.pose_landmarks:
-                    await asyncio.sleep(0.01)  # Short sleep to prevent CPU hogging
+                    await asyncio.sleep(0.01)
                     continue
-
-                # Get and draw landmarks
                 landmarks = pose_results.pose_landmarks.landmark
-                self.mp_draw.draw_landmarks(
-                    color_image,
-                    pose_results.pose_landmarks,
-                    self.mp_pose.POSE_CONNECTIONS,
-                )
 
-                # Determine which arms to process
-                arms_to_process = []
-                if arm == "right" or arm == "both":
-                    arms_to_process.append("right")
-                if arm == "left" or arm == "both":
-                    arms_to_process.append("left")
-
-                # Process each arm
+                # 3. Process the arm(s)
+                arms_to_process = ["right", "left"] if arm == "both" else [arm]
                 for current_arm in arms_to_process:
-                    # Select landmarks based on arm
                     if current_arm == "right":
                         shoulder_landmark = self.mp_pose.PoseLandmark.RIGHT_SHOULDER
                         index_landmark = self.mp_pose.PoseLandmark.RIGHT_INDEX
                         pinky_landmark = self.mp_pose.PoseLandmark.RIGHT_PINKY
                         arm_coordinates = right_arm_coordinates
-                    else:  # left arm
+                    else:
                         shoulder_landmark = self.mp_pose.PoseLandmark.LEFT_SHOULDER
                         index_landmark = self.mp_pose.PoseLandmark.LEFT_INDEX
                         pinky_landmark = self.mp_pose.PoseLandmark.LEFT_PINKY
@@ -467,8 +472,7 @@ class Pipeline_one_mini(Pipeline):
                             + (1 - position_alpha) * prev_reachy_hand_right
                         )
 
-
-                        # Check if the desired position is different to where it's currently at  
+                        # Check if the desired position is different to where it's currently at
                         a = self.reachy.r_arm.forward_kinematics()
                         current_pos = np.array([a[0, 3], a[1, 3], a[2, 3]])
                         if np.allclose(current_pos, smoothed_position, atol=0.03):
@@ -477,15 +481,18 @@ class Pipeline_one_mini(Pipeline):
                             right_already_there = False
 
                         # Only update if position changed significantly from the previous count
-                        if not np.allclose(
-                            prev_reachy_hand_right, smoothed_position, atol=0.02
-                        ) and not right_already_there:
+                        if (
+                            not np.allclose(
+                                prev_reachy_hand_right, smoothed_position, atol=0.02
+                            )
+                            and not right_already_there
+                        ):
                             # Update previous position
                             prev_reachy_hand_right = smoothed_position
 
                             # Compute IK
                             try:
-                                #a = self.reachy.r_arm.forward_kinematics()
+                                # a = self.reachy.r_arm.forward_kinematics()
                                 a[0, 3] = smoothed_position[0]
                                 a[1, 3] = smoothed_position[1]
                                 a[2, 3] = smoothed_position[2]
@@ -619,7 +626,7 @@ class Pipeline_one_mini(Pipeline):
                             + (1 - position_alpha) * prev_reachy_hand_left
                         )
 
-                        # Check if the desired position is different to where it's currently at  
+                        # Check if the desired position is different to where it's currently at
                         a = self.reachy.r_arm.forward_kinematics()
                         current_pos = np.array([a[0, 3], a[1, 3], a[2, 3]])
                         if np.allclose(current_pos, smoothed_position, atol=0.03):
@@ -628,15 +635,18 @@ class Pipeline_one_mini(Pipeline):
                             left_already_there = False
 
                         # Only update if position changed significantly
-                        if not np.allclose(
-                            prev_reachy_hand_left, smoothed_position, atol=0.02
-                        ) and not left_already_there:
+                        if (
+                            not np.allclose(
+                                prev_reachy_hand_left, smoothed_position, atol=0.02
+                            )
+                            and not left_already_there
+                        ):
                             # Update previous position
                             prev_reachy_hand_left = smoothed_position
 
                             # Compute IK
                             try:
-                                #a = self.reachy.l_arm.forward_kinematics()
+                                # a = self.reachy.l_arm.forward_kinematics()
                                 a[0, 3] = smoothed_position[0]
                                 a[1, 3] = smoothed_position[1]
                                 a[2, 3] = smoothed_position[2]
@@ -761,7 +771,10 @@ class Pipeline_one_mini(Pipeline):
 
                 # Apply goal positions directly at controlled rate
                 current_time = time.time()
-                if current_time - last_movement_time_right >= movement_interval and not right_already_there:
+                if (
+                    current_time - last_movement_time_right >= movement_interval
+                    and not right_already_there
+                ):
                     last_movement_right_time = current_time
 
                     # Apply right arm joint positions if any
@@ -790,8 +803,11 @@ class Pipeline_one_mini(Pipeline):
                                 self.reachy.r_arm.r_gripper.goal_position = position
                         except Exception as e:
                             print(f"Error setting position for {joint_name}: {e}")
-                
-                if current_time - last_movement_time_left >= movement_interval and not left_already_there:
+
+                if (
+                    current_time - last_movement_time_left >= movement_interval
+                    and not left_already_there
+                ):
                     last_movement_left_time = current_time
                     # Apply left arm joint positions if any
                     for joint_name, position in left_joint_dict.items():

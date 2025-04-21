@@ -32,7 +32,7 @@ def setup_torque_limits(
 
     Args:
         reachy: The Reachy robot instance
-        torque_limit: The torque limit to set
+        torque_limit: The torque limit to set in percentage of the maximum torque
         arm: Which arm to set limits for ("right", "left", or "both")
     """
     if arm == "right" or arm == "both":
@@ -46,7 +46,7 @@ def setup_torque_limits(
 
 def get_joint_positions(
     reachy, arm: Literal["right", "left", "both"] = "right"
-) -> Dict[str, Dict[str, float]]:
+) -> tuple[dict, dict]:
     """
     Get the current positions of all joints for the specified arm(s).
 
@@ -55,24 +55,22 @@ def get_joint_positions(
         arm: Which arm to get positions for ("right", "left", or "both")
 
     Returns:
-        A dictionary containing joint positions for each specified arm
+        A tuple of (right_positions, left_positions) dictionaries.
+        If an arm is not selected, its dictionary will be empty.
     """
-    result = {}
+    right_positions = {}
+    left_positions = {}
 
     if arm == "right" or arm == "both":
-        right_positions = {}
         for joint_name in RIGHT_JOINT_NAMES:
             right_positions[joint_name] = getattr(
                 getattr(reachy.r_arm, joint_name), "present_position"
             )
-        result["right"] = right_positions
 
     if arm == "left" or arm == "both":
-        left_positions = {}
         for joint_name in LEFT_JOINT_NAMES:
             left_positions[joint_name] = getattr(
                 getattr(reachy.l_arm, joint_name), "present_position"
             )
-        result["left"] = left_positions
 
-    return result
+    return right_positions, left_positions
