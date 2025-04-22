@@ -2,6 +2,7 @@ import numpy as np
 from typing import Tuple, Literal
 
 from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
+from src.models.custom_ik import inverse_kinematics, inverse_kinematics_fixed_wrist
 
 
 class ShadowArm:
@@ -158,12 +159,72 @@ class ShadowArm:
             # Get the current transformation matrix
             transform_matrix = self.arm.forward_kinematics()
 
+            # ! The fact that we're leaving the orientation unchanged might give strange results
             # Set the target position in the transformation matrix
             transform_matrix[:3, 3] = target_position
 
             # Compute IK with current joint positions as starting point
             joint_pos = self.arm.inverse_kinematics(
                 transform_matrix, q0=self.joint_array
+            )
+
+            # Get joint names for this arm
+            joint_names = [
+                f"{self.prefix}shoulder_pitch",
+                f"{self.prefix}shoulder_roll",
+                f"{self.prefix}arm_yaw",
+                f"{self.prefix}elbow_pitch",
+                f"{self.prefix}forearm_yaw",
+                f"{self.prefix}wrist_pitch",
+                f"{self.prefix}wrist_roll",
+            ]
+
+            # Apply rate limiting and update joint dictionary
+            for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
+                # Apply rate limiting
+                limited_change = np.clip(
+                    value - self.joint_array[i], -self.max_change, self.max_change
+                )
+                self.joint_array[i] += limited_change
+                self.joint_dict[name] = self.joint_array[i]
+
+            # Handle gripper separately - maintain closed
+            self.joint_dict[f"{self.prefix}gripper"] = 0
+
+            return True
+        except Exception as e:
+            print(f"{self.side.capitalize()} arm IK calculation error: {e}")
+            return False
+
+    def calculate_joint_positions_custom_ik(
+        self,
+        target_ee_position: np.ndarray,
+        target_elbow_position: np.ndarray,
+        elbow_weight: float,
+    ) -> bool:
+        """Calculate new joint positions using inverse kinematics
+
+        Args:
+            target_position: The target hand position
+
+        Returns:
+            bool: True if calculation was successful
+        """
+        try:
+            # Get the current transformation matrix
+            transform_matrix = self.arm.forward_kinematics()
+
+            # ! The fact that we're leaving the orientation unchanged might give strange results
+            # Set the target position in the transformation matrix
+            transform_matrix[:3, 3] = target_ee_position
+
+            # Compute IK
+            joint_pos = inverse_kinematics_fixed_wrist(
+                hand_position=target_ee_position,
+                elbow_position=target_elbow_position,
+                initial_guess=self.joint_array,
+                elbow_weight=elbow_weight,
+                L=["reachy", 0.28, 0.25, 0.075],
             )
 
             # Get joint names for this arm

@@ -312,6 +312,7 @@ class Pipeline_one_mini(Pipeline):
         position_alpha = 0.4  # For EMA position smoothing
         movement_interval = 0.03  # Send commands at ~30Hz
         max_change = 3.0  # maximum change in degrees per joint per update
+        elbow_weight = 0.1
         ########################################
 
         ############### FLAGS ##################
@@ -385,6 +386,9 @@ class Pipeline_one_mini(Pipeline):
                     target_ee_coord = get_reachy_coordinates(
                         hand, shoulder, self.hand_sf, current_arm.side
                     )
+                    target_elbow_coord = get_reachy_coordinates(
+                        elbow, shoulder, self.elbow_sf, current_arm.side
+                    )
 
                     # TODO: Check if the target end effector coordinates are within reachy's reach
                     # 3b. Process the new ee_position and calculate IK if needed
@@ -393,12 +397,17 @@ class Pipeline_one_mini(Pipeline):
                     )
 
                     if should_update:
+                        # ! We're not smoothing the elbow position here
                         # Calculate IK and update joint positions
-                        successful_update = current_arm.calculate_joint_positions(
-                            target_ee_coord_smoothed
+                        successful_update = (
+                            current_arm.calculate_joint_positions_custom_ik(
+                                target_ee_coord_smoothed,
+                                target_elbow_coord,
+                                elbow_weight,
+                            )
                         )
 
-                # Apply goal positions directly at controlled rate
+                # Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
                 if (
                     current_time - last_movement_time >= movement_interval
