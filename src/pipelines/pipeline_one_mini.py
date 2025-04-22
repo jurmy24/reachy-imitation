@@ -1,23 +1,19 @@
 import time
-from typing import Literal
-from src.models.ik_mini import (
-    scale_point,
-    transform_to_shoulder_origin,
-    translate_to_reachy_origin,
-    within_reachys_reach,
-)
+from typing import List, Literal
+import numpy as np
+import cv2
+import asyncio
+from reachy_sdk.trajectory import goto
+from reachy_sdk.trajectory.interpolation import InterpolationMode
+
+from src.utils.three_d import get_reachy_coordinates
 from src.pipelines.Pipeline import Pipeline
 from src.mapping.get_arm_lengths import get_arm_lengths
 from src.mapping.map_to_robot_coordinates import get_scale_factors
 from src.sensing.extract_3D_points import get_head_coordinates
-import numpy as np
-import cv2
-from reachy_sdk.trajectory import goto
-from reachy_sdk.trajectory.interpolation import InterpolationMode
 from config.CONSTANTS import get_zero_pos
-from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
-from src.reachy.utils import setup_torque_limits, get_joint_positions
-import asyncio
+from src.reachy.utils import setup_torque_limits
+from src.models.shadow_arms import ShadowArm
 
 
 class Pipeline_one_mini(Pipeline):
@@ -49,19 +45,11 @@ class Pipeline_one_mini(Pipeline):
         try:
             while True:
                 # Get frames from RealSense camera
-                frames = self.pipeline.wait_for_frames()
-                aligned_frames = self.align.process(frames)
-                color_frame = aligned_frames.get_color_frame()
-                depth_frame = aligned_frames.get_depth_frame()
-
-                # Check if frames are valid
-                if not color_frame or not depth_frame:
+                camera_data = self._get_camera_data()
+                if camera_data is None:
                     continue
 
-                # Process the image
-                color_image = np.asanyarray(color_frame.get_data())
-                rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-                h, w, _ = color_image.shape
+                color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
                 # Get the head coordinates
                 head_position = get_head_coordinates(
@@ -179,18 +167,12 @@ class Pipeline_one_mini(Pipeline):
             time.sleep(2.0)
 
             while True:
-                frames = self.pipeline.wait_for_frames()
-                aligned_frames = self.align.process(frames)
-                color_frame = aligned_frames.get_color_frame()
-                depth_frame = aligned_frames.get_depth_frame()
-
-                if not color_frame or not depth_frame:
+                # Get frames from RealSense camera
+                camera_data = self._get_camera_data()
+                if camera_data is None:
                     continue
 
-                color_image = np.asanyarray(color_frame.get_data())
-                rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-
-                h, w, _ = color_image.shape
+                color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
                 pose_results = self.pose.process(rgb_image)
                 if pose_results.pose_landmarks:
@@ -266,38 +248,18 @@ class Pipeline_one_mini(Pipeline):
         self._calculate_scale_factors()
 
     def display_frame(
-        self, arm, color_image, right_arm_coordinates, left_arm_coordinates
+        self,
+        arm,
+        color_image,
+        pose_landmarks=None,
     ):
-        # Display 3D coordinates on the image
-        y_offset = 30
-
-        # Display right arm coordinates
-        for name, coord in right_arm_coordinates.items():
-            x, y, z = coord
-            cv2.putText(
+        # Display landmarks on the image
+        if pose_landmarks:
+            self.mp_draw.draw_landmarks(
                 color_image,
-                f"R_{name}: ({x:.2f}, {y:.2f}, {z:.2f})m",
-                (50, y_offset),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 255, 0),  # Green for right arm
-                2,
+                pose_landmarks,
+                self.mp_pose.POSE_CONNECTIONS,
             )
-            y_offset += 20
-
-        # Display left arm coordinates
-        for name, coord in left_arm_coordinates.items():
-            x, y, z = coord
-            cv2.putText(
-                color_image,
-                f"L_{name}: ({x:.2f}, {y:.2f}, {z:.2f})m",
-                (50, y_offset),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 0, 0),  # Blue for left arm
-                2,
-            )
-            y_offset += 20
 
         # Set window title based on which arm(s) is being tracked
         window_title = "RealSense "
@@ -312,519 +274,161 @@ class Pipeline_one_mini(Pipeline):
         # Display the image
         cv2.imshow(window_title, color_image)
 
+    def _get_camera_data(self):
+        """Get frames from RealSense camera with validity check.
+
+        Returns:
+            tuple: (color_frame, depth_frame, color_image, rgb_image, h, w) if valid
+                   None if frames are invalid
+        """
+        frames = self.pipeline.wait_for_frames()
+        aligned_frames = self.align.process(frames)
+        color_frame = aligned_frames.get_color_frame()
+        depth_frame = aligned_frames.get_depth_frame()
+
+        # Check if frames are valid
+        if not color_frame or not depth_frame:
+            return None
+
+        # Process the color image
+        color_image = np.asanyarray(color_frame.get_data())
+        rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+        h, w, _ = color_image.shape
+
+        return color_frame, depth_frame, color_image, rgb_image, h, w
+
     async def shadow(
-        self, arm: Literal["right", "left", "both"] = "right", display: bool = True
+        self, side: Literal["right", "left", "both"] = "right", display: bool = True
     ):
         """
         Control Reachy to shadow human arm movements in real-time.
 
         Args:
-            arm: Which arm to track ("right", "left", or "both")
-            display: Whether to display the video window with augmented visualization
+            side: Which arm to track ("right", "left", or "both")
+            display: Whether to display the video window with tracking information
         """
+        ############### Parameters ###############
+        smoothing_buffer_size = 5
+        position_alpha = 0.4  # For EMA position smoothing
+        movement_interval = 0.03  # Send commands at ~30Hz
+        max_change = 3.0  # maximum change in degrees per joint per update
+        ########################################
+
+        ############### FLAGS ##################
+        cleanup_requested = False
+        successful_update = False
+        ########################################
+
         try:
-            setup_torque_limits(self.reachy, 70.0, arm)
+            # Set torque limits for all motor joints for safety
+            setup_torque_limits(self.reachy, 80.0, side)
 
-            # Position and velocity smoothing parameters
-            smoothing_buffer_size = 5
-            right_position_history = []
-            left_position_history = []
-            # velocity_alpha = 0.3  # For EMA velocity smoothing
-            position_alpha = 0.4  # For EMA position smoothing
-
-            # Get initial positions directly
-            prev_reachy_hand_right = self.reachy.r_arm.forward_kinematics()[0:3, 3]
-            prev_reachy_hand_left = self.reachy.l_arm.forward_kinematics()[0:3, 3]
-
-            # Get the initial joint positions using the utility function
-            joint_positions = get_joint_positions(self.reachy, arm)
-
-            # Extract the right and left joint positions
-            prev_right_joint_pos = joint_positions.get("right", {})
-            prev_left_joint_pos = joint_positions.get("left", {})
+            # Initialize the arm(s) for shadowing
+            arms_to_process: List[ShadowArm] = []
+            if side in ["right", "both"]:
+                right_arm = ShadowArm(
+                    self.reachy.r_arm,
+                    "right",
+                    smoothing_buffer_size,
+                    position_alpha,
+                    max_change,
+                    self.mp_pose,
+                )
+                arms_to_process.append(right_arm)
+            if side in ["left", "both"]:
+                left_arm = ShadowArm(
+                    self.reachy.l_arm,
+                    "left",
+                    smoothing_buffer_size,
+                    position_alpha,
+                    max_change,
+                    self.mp_pose,
+                )
+                arms_to_process.append(left_arm)
 
             # For frame rate and movement control
-            last_movement_time_right = time.time()
-            last_movement_time_left = time.time()
-            movement_interval = 0.03  # Send commands at ~30Hz
+            last_movement_time = time.time()
 
-            # Initialize dictionaries that will store the final joint positions to apply
-            right_joint_dict = {}
-            left_joint_dict = {}
-
-            # For handling graceful shutdown
-            cleanup_requested = False
-
-            print(
-                "Starting direct control with goal_position. Press 'q' to exit safely."
-            )
+            print("Starting shadowing. Press 'q' to exit safely.")
 
             while not cleanup_requested:
                 loop_start_time = time.time()
 
-                # Get frames from RealSense camera
-                frames = self.pipeline.wait_for_frames()
-                aligned_frames = self.align.process(frames)
-                color_frame = aligned_frames.get_color_frame()
-                depth_frame = aligned_frames.get_depth_frame()
-
-                # Check if frames are valid
-                if not color_frame or not depth_frame:
+                # 1. get data from RealSense camera
+                camera_data = self._get_camera_data()
+                if camera_data is None:
+                    await asyncio.sleep(0.01)
                     continue
+                color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
-                # Process the color image
-                color_image = np.asanyarray(color_frame.get_data())
-                rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-                h, w, _ = color_image.shape
-
-                # Coordinate storage for visualization
-                right_arm_coordinates = {}
-                left_arm_coordinates = {}
-
-                # Process pose landmarks
+                # 2. get pose landmarks from the image using mediapipe
                 pose_results = self.pose.process(rgb_image)
                 if not pose_results.pose_landmarks:
-                    await asyncio.sleep(0.01)  # Short sleep to prevent CPU hogging
+                    await asyncio.sleep(0.01)
                     continue
-
-                # Get and draw landmarks
                 landmarks = pose_results.pose_landmarks.landmark
-                self.mp_draw.draw_landmarks(
-                    color_image,
-                    pose_results.pose_landmarks,
-                    self.mp_pose.POSE_CONNECTIONS,
-                )
 
-                # Determine which arms to process
-                arms_to_process = []
-                if arm == "right" or arm == "both":
-                    arms_to_process.append("right")
-                if arm == "left" or arm == "both":
-                    arms_to_process.append("left")
-
-                # Process each arm
+                # 3. process each arm
                 for current_arm in arms_to_process:
-                    # Select landmarks based on arm
-                    if current_arm == "right":
-                        shoulder_landmark = self.mp_pose.PoseLandmark.RIGHT_SHOULDER
-                        index_landmark = self.mp_pose.PoseLandmark.RIGHT_INDEX
-                        pinky_landmark = self.mp_pose.PoseLandmark.RIGHT_PINKY
-                        arm_coordinates = right_arm_coordinates
-                    else:  # left arm
-                        shoulder_landmark = self.mp_pose.PoseLandmark.LEFT_SHOULDER
-                        index_landmark = self.mp_pose.PoseLandmark.LEFT_INDEX
-                        pinky_landmark = self.mp_pose.PoseLandmark.LEFT_PINKY
-                        arm_coordinates = left_arm_coordinates
+                    # Update the arm's joint array with current joint positions
+                    current_arm.joint_array = current_arm.get_joint_array()
 
-                    # Get 3D coordinates
-                    shoulder = get_3D_coordinates(
-                        landmarks[shoulder_landmark],
-                        depth_frame,
-                        w,
-                        h,
-                        self.intrinsics,
+                    # TODO: use the elbow too (for the pipeline_one)
+                    # 3a. get coordinates of reachy's hands in reachy's frame
+                    shoulder, elbow, hand = current_arm.get_coordinates(
+                        landmarks, depth_frame, w, h, self.intrinsics
                     )
-                    hand = get_3D_coordinates_of_hand(
-                        landmarks[index_landmark],
-                        landmarks[pinky_landmark],
-                        depth_frame,
-                        w,
-                        h,
-                        self.intrinsics,
-                    )
-
-                    # Skip if any coordinate is invalid
                     if shoulder is None or hand is None:
-                        await asyncio.sleep(0.01)  # Short sleep to prevent CPU hogging
+                        await asyncio.sleep(0.01)
                         continue
 
-                    # Transform coordinates to robot space
-                    hand_rel_shoulder = transform_to_shoulder_origin(hand, shoulder)
-                    scaled_hand = scale_point(self.hand_sf, hand_rel_shoulder)
-                    reachy_hand = translate_to_reachy_origin(scaled_hand, current_arm)
+                    target_ee_coord = get_reachy_coordinates(
+                        hand, shoulder, self.hand_sf, current_arm.side
+                    )
 
-                    # Store coordinates for display
-                    arm_coordinates["shoulder"] = shoulder
-                    arm_coordinates["hand"] = hand
-                    arm_coordinates["hand_rel_shoulder"] = hand_rel_shoulder
-                    arm_coordinates["reachy_hand"] = reachy_hand
+                    # TODO: Check if the target end effector coordinates are within reachy's reach
+                    # 3b. Process the new ee_position and calculate IK if needed
+                    should_update, target_ee_coord_smoothed = (
+                        current_arm.process_new_position(target_ee_coord)
+                    )
 
-                    # # Check if the hand is within reachy's reach
-                    # if not within_reachys_reach(scaled_hand):
-                    #     print(f"WARNING: Position {scaled_hand} is beyond reach")
-                    #     continue
-
-                    # Update robot control based on arm
-                    if current_arm == "right":
-                        # Apply position smoothing
-                        right_position_history.append(reachy_hand)
-                        if len(right_position_history) > smoothing_buffer_size:
-                            right_position_history.pop(0)
-
-                        # Compute EMA for smoother position
-                        smoothed_position = (
-                            position_alpha * reachy_hand
-                            + (1 - position_alpha) * prev_reachy_hand_right
+                    if should_update:
+                        # Calculate IK and update joint positions
+                        successful_update = current_arm.calculate_joint_positions(
+                            target_ee_coord_smoothed
                         )
-
-
-                        # Check if the desired position is different to where it's currently at  
-                        a = self.reachy.r_arm.forward_kinematics()
-                        current_pos = np.array([a[0, 3], a[1, 3], a[2, 3]])
-                        if np.allclose(current_pos, smoothed_position, atol=0.03):
-                            right_already_there = True
-                        else:
-                            right_already_there = False
-
-                        # Only update if position changed significantly from the previous count
-                        if not np.allclose(
-                            prev_reachy_hand_right, smoothed_position, atol=0.02
-                        ) and not right_already_there:
-                            # Update previous position
-                            prev_reachy_hand_right = smoothed_position
-
-                            # Compute IK
-                            try:
-                                #a = self.reachy.r_arm.forward_kinematics()
-                                a[0, 3] = smoothed_position[0]
-                                a[1, 3] = smoothed_position[1]
-                                a[2, 3] = smoothed_position[2]
-                                joint_pos = self.reachy.r_arm.inverse_kinematics(a)
-
-                                # Directly map joint positions instead of using loops
-                                # The order of joint_pos corresponds to: shoulder_pitch, shoulder_roll, arm_yaw,
-                                # elbow_pitch, forearm_yaw, wrist_pitch, wrist_roll, gripper
-
-                                # Set right arm joint positions directly without loops
-                                r_shoulder_pitch_pos = joint_pos[0]
-                                r_shoulder_roll_pos = joint_pos[1]
-                                r_arm_yaw_pos = joint_pos[2]
-                                r_elbow_pitch_pos = joint_pos[3]
-                                r_forearm_yaw_pos = joint_pos[4]
-                                r_wrist_pitch_pos = joint_pos[5]
-                                r_wrist_roll_pos = joint_pos[6]
-                                r_gripper_pos = (
-                                    joint_pos[7]
-                                    if len(joint_pos) > 7
-                                    else prev_right_joint_pos.get("r_gripper", 0)
-                                )
-
-                                # Apply velocity limiting individually for each joint
-                                # Calculate maximum allowed change per update
-                                max_change = 3.0  # degrees per update
-
-                                # Shoulder pitch
-                                current_pos = prev_right_joint_pos.get(
-                                    "r_shoulder_pitch", r_shoulder_pitch_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    r_shoulder_pitch_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                right_joint_dict["r_shoulder_pitch"] = limited_pos
-                                prev_right_joint_pos["r_shoulder_pitch"] = limited_pos
-
-                                # Shoulder roll
-                                current_pos = prev_right_joint_pos.get(
-                                    "r_shoulder_roll", r_shoulder_roll_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    r_shoulder_roll_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                right_joint_dict["r_shoulder_roll"] = limited_pos
-                                prev_right_joint_pos["r_shoulder_roll"] = limited_pos
-
-                                # Arm yaw
-                                current_pos = prev_right_joint_pos.get(
-                                    "r_arm_yaw", r_arm_yaw_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    r_arm_yaw_pos - current_pos, -max_change, max_change
-                                )
-                                right_joint_dict["r_arm_yaw"] = limited_pos
-                                prev_right_joint_pos["r_arm_yaw"] = limited_pos
-
-                                # Elbow pitch
-                                current_pos = prev_right_joint_pos.get(
-                                    "r_elbow_pitch", r_elbow_pitch_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    r_elbow_pitch_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                right_joint_dict["r_elbow_pitch"] = limited_pos
-                                prev_right_joint_pos["r_elbow_pitch"] = limited_pos
-
-                                # Forearm yaw
-                                current_pos = prev_right_joint_pos.get(
-                                    "r_forearm_yaw", r_forearm_yaw_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    r_forearm_yaw_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                right_joint_dict["r_forearm_yaw"] = limited_pos
-                                prev_right_joint_pos["r_forearm_yaw"] = limited_pos
-
-                                # Wrist pitch
-                                current_pos = prev_right_joint_pos.get(
-                                    "r_wrist_pitch", r_wrist_pitch_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    r_wrist_pitch_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                right_joint_dict["r_wrist_pitch"] = limited_pos
-                                prev_right_joint_pos["r_wrist_pitch"] = limited_pos
-
-                                # Wrist roll
-                                current_pos = prev_right_joint_pos.get(
-                                    "r_wrist_roll", r_wrist_roll_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    r_wrist_roll_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                right_joint_dict["r_wrist_roll"] = limited_pos
-                                prev_right_joint_pos["r_wrist_roll"] = limited_pos
-
-                                # Gripper
-                                current_pos = prev_right_joint_pos.get(
-                                    "r_gripper", r_gripper_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    r_gripper_pos - current_pos, -max_change, max_change
-                                )
-                                right_joint_dict["r_gripper"] = limited_pos
-                                prev_right_joint_pos["r_gripper"] = limited_pos
-
-                            except Exception as e:
-                                print(f"Right arm IK calculation error: {e}")
-                    else:  # left arm
-                        # Apply position smoothing
-                        left_position_history.append(reachy_hand)
-                        if len(left_position_history) > smoothing_buffer_size:
-                            left_position_history.pop(0)
-
-                        # Compute EMA for smoother position
-                        smoothed_position = (
-                            position_alpha * reachy_hand
-                            + (1 - position_alpha) * prev_reachy_hand_left
-                        )
-
-                        # Check if the desired position is different to where it's currently at  
-                        a = self.reachy.r_arm.forward_kinematics()
-                        current_pos = np.array([a[0, 3], a[1, 3], a[2, 3]])
-                        if np.allclose(current_pos, smoothed_position, atol=0.03):
-                            left_already_there = True
-                        else:
-                            left_already_there = False
-
-                        # Only update if position changed significantly
-                        if not np.allclose(
-                            prev_reachy_hand_left, smoothed_position, atol=0.02
-                        ) and not left_already_there:
-                            # Update previous position
-                            prev_reachy_hand_left = smoothed_position
-
-                            # Compute IK
-                            try:
-                                #a = self.reachy.l_arm.forward_kinematics()
-                                a[0, 3] = smoothed_position[0]
-                                a[1, 3] = smoothed_position[1]
-                                a[2, 3] = smoothed_position[2]
-                                joint_pos = self.reachy.l_arm.inverse_kinematics(a)
-
-                                # Directly map joint positions instead of using loops
-                                # The order of joint_pos corresponds to: shoulder_pitch, shoulder_roll, arm_yaw,
-                                # elbow_pitch, forearm_yaw, wrist_pitch, wrist_roll, gripper
-
-                                # Set left arm joint positions directly without loops
-                                l_shoulder_pitch_pos = joint_pos[0]
-                                l_shoulder_roll_pos = joint_pos[1]
-                                l_arm_yaw_pos = joint_pos[2]
-                                l_elbow_pitch_pos = joint_pos[3]
-                                l_forearm_yaw_pos = joint_pos[4]
-                                l_wrist_pitch_pos = joint_pos[5]
-                                l_wrist_roll_pos = joint_pos[6]
-                                l_gripper_pos = (
-                                    joint_pos[7]
-                                    if len(joint_pos) > 7
-                                    else prev_left_joint_pos.get("l_gripper", 0)
-                                )
-
-                                # Apply velocity limiting individually for each joint
-                                # Calculate maximum allowed change per update
-                                max_change = 3.0  # degrees per update
-
-                                # Shoulder pitch
-                                current_pos = prev_left_joint_pos.get(
-                                    "l_shoulder_pitch", l_shoulder_pitch_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    l_shoulder_pitch_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                left_joint_dict["l_shoulder_pitch"] = limited_pos
-                                prev_left_joint_pos["l_shoulder_pitch"] = limited_pos
-
-                                # Shoulder roll
-                                current_pos = prev_left_joint_pos.get(
-                                    "l_shoulder_roll", l_shoulder_roll_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    l_shoulder_roll_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                left_joint_dict["l_shoulder_roll"] = limited_pos
-                                prev_left_joint_pos["l_shoulder_roll"] = limited_pos
-
-                                # Arm yaw
-                                current_pos = prev_left_joint_pos.get(
-                                    "l_arm_yaw", l_arm_yaw_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    l_arm_yaw_pos - current_pos, -max_change, max_change
-                                )
-                                left_joint_dict["l_arm_yaw"] = limited_pos
-                                prev_left_joint_pos["l_arm_yaw"] = limited_pos
-
-                                # Elbow pitch
-                                current_pos = prev_left_joint_pos.get(
-                                    "l_elbow_pitch", l_elbow_pitch_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    l_elbow_pitch_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                left_joint_dict["l_elbow_pitch"] = limited_pos
-                                prev_left_joint_pos["l_elbow_pitch"] = limited_pos
-
-                                # Forearm yaw
-                                current_pos = prev_left_joint_pos.get(
-                                    "l_forearm_yaw", l_forearm_yaw_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    l_forearm_yaw_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                left_joint_dict["l_forearm_yaw"] = limited_pos
-                                prev_left_joint_pos["l_forearm_yaw"] = limited_pos
-
-                                # Wrist pitch
-                                current_pos = prev_left_joint_pos.get(
-                                    "l_wrist_pitch", l_wrist_pitch_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    l_wrist_pitch_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                left_joint_dict["l_wrist_pitch"] = limited_pos
-                                prev_left_joint_pos["l_wrist_pitch"] = limited_pos
-
-                                # Wrist roll
-                                current_pos = prev_left_joint_pos.get(
-                                    "l_wrist_roll", l_wrist_roll_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    l_wrist_roll_pos - current_pos,
-                                    -max_change,
-                                    max_change,
-                                )
-                                left_joint_dict["l_wrist_roll"] = limited_pos
-                                prev_left_joint_pos["l_wrist_roll"] = limited_pos
-
-                                # Gripper
-                                current_pos = prev_left_joint_pos.get(
-                                    "l_gripper", l_gripper_pos
-                                )
-                                limited_pos = current_pos + np.clip(
-                                    l_gripper_pos - current_pos, -max_change, max_change
-                                )
-                                left_joint_dict["l_gripper"] = limited_pos
-                                prev_left_joint_pos["l_gripper"] = limited_pos
-
-                            except Exception as e:
-                                print(f"Left arm IK calculation error: {e}")
 
                 # Apply goal positions directly at controlled rate
                 current_time = time.time()
-                if current_time - last_movement_time_right >= movement_interval and not right_already_there:
-                    last_movement_right_time = current_time
+                if (
+                    current_time - last_movement_time >= movement_interval
+                    and successful_update
+                ):
+                    last_movement_time = current_time
 
-                    # Apply right arm joint positions if any
-                    for joint_name, position in right_joint_dict.items():
-                        try:
-                            # Apply position directly to the right joint using its name
-                            if joint_name == "r_shoulder_pitch":
-                                self.reachy.r_arm.r_shoulder_pitch.goal_position = (
-                                    position
-                                )
-                            elif joint_name == "r_shoulder_roll":
-                                self.reachy.r_arm.r_shoulder_roll.goal_position = (
-                                    position
-                                )
-                            elif joint_name == "r_arm_yaw":
-                                self.reachy.r_arm.r_arm_yaw.goal_position = position
-                            elif joint_name == "r_elbow_pitch":
-                                self.reachy.r_arm.r_elbow_pitch.goal_position = position
-                            elif joint_name == "r_forearm_yaw":
-                                self.reachy.r_arm.r_forearm_yaw.goal_position = position
-                            elif joint_name == "r_wrist_pitch":
-                                self.reachy.r_arm.r_wrist_pitch.goal_position = position
-                            elif joint_name == "r_wrist_roll":
-                                self.reachy.r_arm.r_wrist_roll.goal_position = position
-                            elif joint_name == "r_gripper":
-                                self.reachy.r_arm.r_gripper.goal_position = position
-                        except Exception as e:
-                            print(f"Error setting position for {joint_name}: {e}")
-                
-                if current_time - last_movement_time_left >= movement_interval and not left_already_there:
-                    last_movement_left_time = current_time
-                    # Apply left arm joint positions if any
-                    for joint_name, position in left_joint_dict.items():
-                        try:
-                            # Apply position directly to the left joint using its name
-                            if joint_name == "l_shoulder_pitch":
-                                self.reachy.l_arm.l_shoulder_pitch.goal_position = (
-                                    position
-                                )
-                            elif joint_name == "l_shoulder_roll":
-                                self.reachy.l_arm.l_shoulder_roll.goal_position = (
-                                    position
-                                )
-                            elif joint_name == "l_arm_yaw":
-                                self.reachy.l_arm.l_arm_yaw.goal_position = position
-                            elif joint_name == "l_elbow_pitch":
-                                self.reachy.l_arm.l_elbow_pitch.goal_position = position
-                            elif joint_name == "l_forearm_yaw":
-                                self.reachy.l_arm.l_forearm_yaw.goal_position = position
-                            elif joint_name == "l_wrist_pitch":
-                                self.reachy.l_arm.l_wrist_pitch.goal_position = position
-                            elif joint_name == "l_wrist_roll":
-                                self.reachy.l_arm.l_wrist_roll.goal_position = position
-                            elif joint_name == "l_gripper":
-                                self.reachy.l_arm.l_gripper.goal_position = position
-                        except Exception as e:
-                            print(f"Error setting position for {joint_name}: {e}")
+                    # Apply joint positions for all arms that have updates
+                    for current_arm in arms_to_process:
+                        # Apply arm joint positions if there are any to apply
+                        if current_arm.joint_dict:
+                            for (
+                                joint_name,
+                                joint_value,
+                            ) in current_arm.joint_dict.items():
+                                try:
+                                    # Apply position directly to the joint
+                                    setattr(
+                                        getattr(current_arm.arm, joint_name),
+                                        "goal_position",
+                                        joint_value,
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Error setting position for {joint_name}: {e}"
+                                    )
 
                 # Display tracking data if enabled
                 if display:
-                    self.display_frame(
-                        arm, color_image, right_arm_coordinates, left_arm_coordinates
-                    )
+                    self.display_frame(side, color_image, landmarks)
 
                 # Check for exit key
                 if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -836,69 +440,7 @@ class Pipeline_one_mini(Pipeline):
                     await asyncio.sleep(0.01 - elapsed)
                 else:
                     await asyncio.sleep(0.001)  # Minimal yield to event loop
-
         except Exception as e:
             print(f"Failed to run the shadow pipeline: {e}")
-            # Safety: make sure to set arms to compliant mode on error
-            try:
-                if arm == "right" or arm == "both":
-                    self.reachy.turn_off_smoothly("r_arm")
-                if arm == "left" or arm == "both":
-                    self.reachy.turn_off_smoothly("l_arm")
-            except:
-                print("Error during emergency shutdown")
-            cv2.destroyAllWindows()
         finally:
-
-            # Perform graceful shutdown
-            print("Exiting control loop, performing gradual shutdown...")
-
-            # Gradually reduce torque to prevent sudden drops - using direct joint access
-            for torque in range(70, 20, -10):
-                # Right arm
-                if arm == "right" or arm == "both":
-                    if hasattr(self.reachy.r_arm, "r_shoulder_pitch"):
-                        self.reachy.r_arm.r_shoulder_pitch.torque_limit = torque
-                    if hasattr(self.reachy.r_arm, "r_shoulder_roll"):
-                        self.reachy.r_arm.r_shoulder_roll.torque_limit = torque
-                    if hasattr(self.reachy.r_arm, "r_arm_yaw"):
-                        self.reachy.r_arm.r_arm_yaw.torque_limit = torque
-                    if hasattr(self.reachy.r_arm, "r_elbow_pitch"):
-                        self.reachy.r_arm.r_elbow_pitch.torque_limit = torque
-                    if hasattr(self.reachy.r_arm, "r_forearm_yaw"):
-                        self.reachy.r_arm.r_forearm_yaw.torque_limit = torque
-                    if hasattr(self.reachy.r_arm, "r_wrist_pitch"):
-                        self.reachy.r_arm.r_wrist_pitch.torque_limit = torque
-                    if hasattr(self.reachy.r_arm, "r_wrist_roll"):
-                        self.reachy.r_arm.r_wrist_roll.torque_limit = torque
-                    if hasattr(self.reachy.r_arm, "r_gripper"):
-                        self.reachy.r_arm.r_gripper.torque_limit = torque
-
-                # Left arm
-                if arm == "left" or arm == "both":
-                    if hasattr(self.reachy.l_arm, "l_shoulder_pitch"):
-                        self.reachy.l_arm.l_shoulder_pitch.torque_limit = torque
-                    if hasattr(self.reachy.l_arm, "l_shoulder_roll"):
-                        self.reachy.l_arm.l_shoulder_roll.torque_limit = torque
-                    if hasattr(self.reachy.l_arm, "l_arm_yaw"):
-                        self.reachy.l_arm.l_arm_yaw.torque_limit = torque
-                    if hasattr(self.reachy.l_arm, "l_elbow_pitch"):
-                        self.reachy.l_arm.l_elbow_pitch.torque_limit = torque
-                    if hasattr(self.reachy.l_arm, "l_forearm_yaw"):
-                        self.reachy.l_arm.l_forearm_yaw.torque_limit = torque
-                    if hasattr(self.reachy.l_arm, "l_wrist_pitch"):
-                        self.reachy.l_arm.l_wrist_pitch.torque_limit = torque
-                    if hasattr(self.reachy.l_arm, "l_wrist_roll"):
-                        self.reachy.l_arm.l_wrist_roll.torque_limit = torque
-                    if hasattr(self.reachy.l_arm, "l_gripper"):
-                        self.reachy.l_arm.l_gripper.torque_limit = torque
-
-                await asyncio.sleep(0.2)
-
-            # Finally turn motors to compliant mode
-            if arm == "right" or arm == "both":
-                self.reachy.turn_off_smoothly("r_arm")
-            if arm == "left" or arm == "both":
-                self.reachy.turn_off_smoothly("l_arm")
-
-            cv2.destroyAllWindows()
+            self.cleanup()

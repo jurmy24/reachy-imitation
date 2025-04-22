@@ -1,4 +1,3 @@
-import argparse
 from reachy_sdk import ReachySDK
 from src.mapping.map_to_robot_coordinates import get_scale_factors
 from src.pipelines.pipeline_one_mini import Pipeline_one_mini
@@ -8,30 +7,15 @@ from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 reachy = ReachySDK(host="138.195.196.90")
 
 
-ordered_joint_names = [
-    reachy.r_arm.r_shoulder_pitch,
-    reachy.r_arm.r_shoulder_roll,
-    reachy.r_arm.r_arm_yaw,
-    reachy.r_arm.r_elbow_pitch,
-    reachy.r_arm.r_forearm_yaw,
-    reachy.r_arm.r_wrist_pitch,
-    reachy.r_arm.r_wrist_roll
-]
-
 async def main():
     calibrate = False
     arm = "both"
 
-    # Initialize pipeline
     pipeline = Pipeline_one_mini(reachy)
-
-    # Run calibration if requested
     if calibrate:
         print("Running initiation protocol...")
         pipeline.initiation_protocol()
-        print(
-            f"Calibration complete. Hand SF: {pipeline.hand_sf}, Elbow SF: {pipeline.elbow_sf}"
-        )
+        print(f"Calibrated. Hand SF: {pipeline.hand_sf}, Elbow SF: {pipeline.elbow_sf}")
     else:
         print("Using default scale factors")
         hand_sf, elbow_sf = get_scale_factors(
@@ -43,7 +27,6 @@ async def main():
     # Run the main pipeline
     print(f"Tracking {arm} arm(s)...")
     await pipeline.shadow(arm=arm, display=False)
-
     pipeline.cleanup()
 
     # Example on how to run:

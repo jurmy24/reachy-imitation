@@ -1,5 +1,10 @@
 import numpy as np
 from config.CONSTANTS import CAMERA_TO_REACHY_X, CAMERA_TO_REACHY_Z
+from config.CONSTANTS import (
+    REACHY_R_SHOULDER_COORDINATES,
+    REACHY_L_SHOULDER_COORDINATES,
+    LEN_REACHY_ARM,
+)
 
 
 # Helper function to convert a landmark to 3D coordinates from the camera's perspective using the human coordinate system
@@ -9,9 +14,9 @@ def get_3D_coordinates(landmark, depth_frame, w, h, intrinsics):
     Note that this function converts the camera frame to the human frame whereas the origin remains the same.
 
     Transforms from camera coordinates to robot coordinates:
-    - Human x = -Camera depth
-    - Human y = -Camera x
-    - Human z = -Camera y
+    Human x = -Camera depth
+    Human y = -Camera x
+    Human z = -Camera y
 
     Args:
         landmark: Either a landmark object with x, y, z attributes or
@@ -91,3 +96,21 @@ def get_3D_coordinates_of_hand(
 
     # Call get_3D_coordinates with all required parameters
     return get_3D_coordinates(avg_coords, depth_frame, w, h, intrinsics)
+
+
+def get_reachy_coordinates(point, shoulder, sf, side="right"):
+    """
+
+    Args:
+        point: The point in camera-relative coordinates and human frame
+        shoulder: The shoulder (on same side as the point) in camera-relative coordinates and human frame
+        sf: The scaling factor
+        arm: Either "right" or "left" to specify which shoulder
+
+    Returns:
+        The point, now relative to Reachy's origin and scaled
+    """
+    if side.lower() == "left":
+        return (point - shoulder) * sf + REACHY_L_SHOULDER_COORDINATES
+    else:
+        return (point - shoulder) * sf + REACHY_R_SHOULDER_COORDINATES
