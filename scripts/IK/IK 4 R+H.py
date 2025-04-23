@@ -17,7 +17,7 @@ def mattransfo(alpha, d, theta, r):
 
 # who= "reachy" or "human"
 # correspond to reachy or human
-# length = lenght parameters
+# L = lenght parameters
 
 
 def compute_transformation_matrices(joint_angles, who, length, side):
@@ -92,46 +92,12 @@ def cost_function(joint_angles, hand_position, elbow_position, elbow_weight, who
 
 def inverse_kinematics(hand_position, elbow_position, initial_guess, elbow_weight=0.1,  who="reachy", length=[0.28, 0.25, 0.075], side='right'):
     pi = np.pi
-
-    joint_limits = [(-1.0 * pi,  0.5 * pi), (-1.0 * pi,  10/180 * pi), (-0.5 * pi,  0.5 * pi), (-125 /
-                                                                                                180 * pi,  0), (-100/180 * pi,  100/180 * pi), (-0.25 * pi,  0.25 * pi), (-0.25 * pi,  0.25 * pi)]
+    joint_limits = [(-1.0 * pi,  0.5 * pi), (-1.0 * pi,  10/180 * pi),
+                    (-0.5 * pi,  0.5 * pi), (-125/180 * pi,  0), (0, 0), (0, 0), (0, 0)]
+    # joint_limits = [(-1.0 * pi,  0.5 * pi), (-1.0 * pi,  10/180 * pi), (-0.5 * pi,  0.5 * pi), (-125/180 * pi,  0), (-100/180 * pi,  100/180 * pi), (-0.25 * pi,  0.25 * pi), (-0.25 * pi,  0.25 * pi)]
 
     result = minimize(cost_function, initial_guess, args=(
         hand_position, elbow_position, elbow_weight, who, length, side), method='SLSQP', bounds=joint_limits)
-
-    return result.x
-
-
-def inverse_kinematics_fixed_wrist(
-    hand_position,
-    elbow_position,
-    initial_guess,
-    elbow_weight=0.1,
-    who="reachy",
-    length=[0.28, 0.25, 0.075],
-    side='right'
-):
-    """
-    Implement the inverse kinematics with a fixed wrist.
-    """
-    pi = np.pi
-    joint_limits = [
-        (-1.0 * pi, 0.5 * pi),
-        (-1.0 * pi, 10 / 180 * pi),
-        (-0.5 * pi, 0.5 * pi),
-        (-125 / 180 * pi, 0),
-        (0, 0),
-        (0, 0),
-        (0, 0),
-    ]
-
-    result = minimize(
-        cost_function,
-        initial_guess,
-        args=(hand_position, elbow_position, elbow_weight, who, length, side),
-        method="SLSQP",
-        bounds=joint_limits,
-    )
 
     return result.x
 
