@@ -13,7 +13,7 @@ Contributeurs (Semestre 8) :
 
 - Lafaury, Marin
 - Oldensand, Victor
-- Ghandi, Hugo
+- Gandhi, Hugo
 - Ye, Yi
 
 Encadrants :
