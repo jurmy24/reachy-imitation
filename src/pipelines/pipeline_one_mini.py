@@ -231,6 +231,8 @@ class Pipeline_one_mini(Pipeline):
             print(f"Failed to run the recognize human pipeline: {e}")
         finally:
             print("Measurement complete.")
+            cv2.destroyAllWindows()
+
             self.hand_sf = hand_sf
             self.elbow_sf = elbow_sf
             return hand_sf, elbow_sf
@@ -383,7 +385,7 @@ class Pipeline_one_mini(Pipeline):
                 # 3. process each arm
                 for current_arm in arms_to_process:
                     # Update the arm's joint array with current joint positions
-                    current_arm.joint_array = current_arm.get_joint_array()
+                    #current_arm.joint_array = current_arm.get_joint_array()
 
                     # TODO: use the elbow too (for the pipeline_one)
                     # 3a. get coordinates of reachy's hands in reachy's frame
@@ -409,6 +411,8 @@ class Pipeline_one_mini(Pipeline):
                         successful_update = current_arm.calculate_joint_positions(
                             target_ee_coord_smoothed
                         )
+                    else: 
+                        successful_update = False
 
                 # Apply goal positions directly at controlled rate
                 current_time = time.time()

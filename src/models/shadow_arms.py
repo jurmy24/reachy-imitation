@@ -161,10 +161,10 @@ class ShadowArm:
 
             # Set the target position in the transformation matrix
             transform_matrix[:3, 3] = target_position
-
+            
             # Compute IK with current joint positions as starting point
             joint_pos = self.arm.inverse_kinematics(
-                transform_matrix, q0=self.joint_array
+                transform_matrix, q0=self.get_joint_array()
             )
 
             # Get joint names for this arm
