@@ -26,8 +26,8 @@ async def main():
 
     # Run the main pipeline
     print(f"Tracking {arm} arm(s)...")
-    await pipeline.shadow(arm=arm, display=False)
-    pipeline.cleanup()
+    await pipeline.shadow(side=arm, display=True)
+    #pipeline.cleanup()
 
     # Example on how to run:
     # python -m src.main

@@ -19,8 +19,9 @@ class ShadowArm:
         self.arm = reachy_arm
         self.side: Literal["right", "left"] = side
         self.prefix = f"{side[0]}_"  # "r_" or "l_"
-        self.landmark_indices = self.get_landmark_indices()
         self.mp_pose = mp_pose
+        self.landmark_indices = self.get_landmark_indices()
+        
 
         # Movement tracking
         self.joint_array = self.get_joint_array()
