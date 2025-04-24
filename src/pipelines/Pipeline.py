@@ -56,8 +56,8 @@ class Pipeline(ABC):
         # Configure intel RealSense camera (color and depth streams)
         self.pipeline = rs.pipeline()
         config = rs.config()
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
+        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 60)
 
         # Align depth frame to color frame
         self.align = rs.align(rs.stream.color)
