@@ -5,6 +5,7 @@ import cv2
 import asyncio
 from reachy_sdk.trajectory import goto
 from reachy_sdk.trajectory.interpolation import InterpolationMode
+from collections import defaultdict
 
 from src.utils.three_d import get_reachy_coordinates
 from src.pipelines.Pipeline import Pipeline
@@ -323,11 +324,10 @@ class Pipeline_custom_ik(Pipeline):
         successful_update = False
         ########################################
 
-        # Timing metrics
-        update_times = []
-        loop_latencies = []
-        last_print_time = time.time()
+        # Performance metrics
+        timings = defaultdict(list)
         update_count = 0
+        arm_count = 0  # Track number of arms for per-arm averages
 
         try:
             # Set torque limits for all motor joints for safety
@@ -356,6 +356,8 @@ class Pipeline_custom_ik(Pipeline):
                 )
                 arms_to_process.append(left_arm)
 
+            arm_count = len(arms_to_process)
+
             # For frame rate and movement control
             last_movement_time = time.time()
 
@@ -369,20 +371,30 @@ class Pipeline_custom_ik(Pipeline):
                 loop_start_time = time.time()
 
                 # 1. get data from RealSense camera
+                camera_start = time.time()
                 camera_data = self._get_camera_data()
+                camera_end = time.time()
+                timings["camera_acquisition"].append(camera_end - camera_start)
+
                 if camera_data is None:
                     await asyncio.sleep(0.01)
                     continue
                 color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
                 # 2. get pose landmarks from the image using mediapipe
+                pose_start = time.time()
                 pose_results = self.pose.process(rgb_image)
+                pose_end = time.time()
+                timings["pose_detection"].append(pose_end - pose_start)
 
                 landmarks = pose_results.pose_landmarks
 
                 # Display tracking data if enabled
                 if display:
+                    display_start = time.time()
                     self.display_frame(side, color_image, landmarks)
+                    display_end = time.time()
+                    timings["display"].append(display_end - display_start)
 
                 if not pose_results.pose_landmarks:
                     await asyncio.sleep(0.01)
@@ -390,18 +402,19 @@ class Pipeline_custom_ik(Pipeline):
 
                 # 3. process each arm
                 for current_arm in arms_to_process:
-                    # Update the arm's joint array with current joint positions
-                    # current_arm.joint_array = current_arm.get_joint_array()
-
-                    # TODO: use the elbow too (for the pipeline_one)
                     # 3a. get coordinates of reachy's hands in reachy's frame
+                    coord_start = time.time()
                     shoulder, elbow, hand = current_arm.get_coordinates(
                         landmarks.landmark, depth_frame, w, h, self.intrinsics
                     )
+                    coord_end = time.time()
+                    timings["get_coordinates"].append(coord_end - coord_start)
+
                     if shoulder is None or hand is None:
                         await asyncio.sleep(0.01)
                         continue
 
+                    conv_start = time.time()
                     target_ee_coord = get_reachy_coordinates(
                         hand, shoulder, self.hand_sf, current_arm.side
                     )
@@ -409,16 +422,21 @@ class Pipeline_custom_ik(Pipeline):
                     target_elbow_coord = get_reachy_coordinates(
                         elbow, shoulder, self.elbow_sf, current_arm.side
                     )
+                    conv_end = time.time()
+                    timings["coordinate_conversion"].append(conv_end - conv_start)
 
-                    # TODO: Check if the target end effector coordinates are within reachy's reach
                     # 3b. Process the new ee_position and calculate IK if needed
+                    pos_proc_start = time.time()
                     should_update, target_ee_coord_smoothed = (
                         current_arm.process_new_position(target_ee_coord)
                     )
+                    pos_proc_end = time.time()
+                    timings["position_processing"].append(pos_proc_end - pos_proc_start)
 
                     if should_update:
                         # ! We're not smoothing the elbow position here
                         # Calculate IK and update joint positions
+                        ik_start = time.time()
                         successful_update = (
                             current_arm.calculate_joint_positions_custom_ik(
                                 target_ee_coord_smoothed,
@@ -426,6 +444,8 @@ class Pipeline_custom_ik(Pipeline):
                                 elbow_weight,
                             )
                         )
+                        ik_end = time.time()
+                        timings["inverse_kinematics"].append(ik_end - ik_start)
                     else:
                         successful_update = False
 
@@ -435,8 +455,8 @@ class Pipeline_custom_ik(Pipeline):
                     current_time - last_movement_time >= movement_interval
                     and successful_update
                 ):
+                    apply_start = time.time()
                     last_movement_time = current_time
-                    update_times.append(current_time)
                     update_count += 1
 
                     # Apply joint positions for all arms that have updates
@@ -458,66 +478,75 @@ class Pipeline_custom_ik(Pipeline):
                                     print(
                                         f"Error setting position for {joint_name}: {e}"
                                     )
+                    apply_end = time.time()
+                    timings["apply_positions"].append(apply_end - apply_start)
 
                 # Calculate loop latency
                 loop_end_time = time.time()
                 loop_latency = loop_end_time - loop_start_time
-                loop_latencies.append(loop_latency)
-
-                # Print metrics every second
-                if current_time - last_print_time >= 1.0:
-                    # Calculate update frequency
-                    if len(update_times) >= 2:
-                        time_diffs = np.diff(update_times)
-                        if len(time_diffs) > 0:
-                            avg_update_interval = np.mean(time_diffs)
-                            update_frequency = (
-                                1.0 / avg_update_interval
-                                if avg_update_interval > 0
-                                else 0
-                            )
-                        else:
-                            update_frequency = 0
-                    else:
-                        update_frequency = 0
-
-                    # Calculate average loop latency
-                    avg_loop_latency = np.mean(loop_latencies) if loop_latencies else 0
-
-                    print(
-                        f"Update frequency: {update_frequency:.2f} Hz (updates: {update_count})"
-                    )
-                    print(f"Average loop latency: {avg_loop_latency*1000:.2f} ms")
-
-                    # Reset for next second
-                    last_print_time = current_time
-                    update_times = update_times[
-                        -100:
-                    ]  # Keep only recent updates for memory efficiency
-                    loop_latencies = loop_latencies[-100:]  # Keep only recent latencies
+                timings["total_loop"].append(loop_latency)
 
                 # Ensure we don't hog the CPU
+                sleep_start = time.time()
                 elapsed = time.time() - loop_start_time
                 if elapsed < 0.01:  # Try to maintain reasonable loop time
                     await asyncio.sleep(0.01 - elapsed)
                 else:
                     await asyncio.sleep(0.001)  # Minimal yield to event loop
+                sleep_end = time.time()
+                timings["sleep"].append(sleep_end - sleep_start)
+
         except Exception as e:
             print(f"Failed to run the shadow pipeline: {e}")
         finally:
-            # Print final statistics
-            if update_times and len(update_times) >= 2:
-                time_diffs = np.diff(update_times)
-                avg_update_interval = np.mean(time_diffs)
-                update_frequency = (
-                    1.0 / avg_update_interval if avg_update_interval > 0 else 0
+            # Print final detailed performance statistics
+            print("\n===== PERFORMANCE ANALYSIS =====")
+            print(f"Total updates: {update_count}")
+            print(f"Number of arms: {arm_count}")
+
+            # Calculate and print average times for each section
+            print("\nAverage time per operation (ms):")
+
+            # Sort timings by average time (descending)
+            sorted_timings = sorted(
+                [(k, np.mean(v) * 1000) for k, v in timings.items() if v],
+                key=lambda x: x[1],
+                reverse=True,
+            )
+
+            total_time = (
+                np.mean(timings["total_loop"]) * 1000 if timings["total_loop"] else 0
+            )
+
+            for operation, avg_time in sorted_timings:
+                if operation != "total_loop":
+                    percentage = (avg_time / total_time * 100) if total_time > 0 else 0
+                    print(
+                        f"{operation:<25}: {avg_time:6.2f} ms ({percentage:5.1f}% of loop)"
+                    )
+
+            # Print loop summary
+            if timings["total_loop"]:
+                avg_loop = np.mean(timings["total_loop"]) * 1000
+                min_loop = min(timings["total_loop"]) * 1000
+                max_loop = max(timings["total_loop"]) * 1000
+                theoretical_max_hz = 1000 / avg_loop if avg_loop > 0 else 0
+
+                print(f"\nLoop timing:")
+                print(
+                    f"  Average: {avg_loop:.2f} ms (theoretical max: {theoretical_max_hz:.1f} Hz)"
                 )
-                print(f"Final statistics:")
-                print(f"Update frequency: {update_frequency:.2f} Hz")
-                print(f"Total updates: {update_count}")
-                if loop_latencies:
-                    print(f"Min loop latency: {min(loop_latencies)*1000:.2f} ms")
-                    print(f"Max loop latency: {max(loop_latencies)*1000:.2f} ms")
-                    print(f"Avg loop latency: {np.mean(loop_latencies)*1000:.2f} ms")
+                print(f"  Min: {min_loop:.2f} ms, Max: {max_loop:.2f} ms")
+
+                # Calculate effective update rate
+                if update_count > 0 and timings["total_loop"]:
+                    total_run_time = sum(timings["total_loop"])
+                    effective_hz = (
+                        update_count / total_run_time if total_run_time > 0 else 0
+                    )
+                    print(f"\nEffective update rate: {effective_hz:.2f} Hz")
+                    print(
+                        f"Target update rate: {1/movement_interval:.1f} Hz (movement_interval={movement_interval}s)"
+                    )
 
             self.cleanup()
