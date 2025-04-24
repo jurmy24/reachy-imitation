@@ -7,7 +7,7 @@ from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 reachy = ReachySDK(host="138.195.196.90")
 
 
-async def main():
+def main():
     calibrate = False
     arm = "right"
 
