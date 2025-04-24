@@ -3,6 +3,7 @@
 from reachy_sdk import ReachySDK
 from reachy_sdk.trajectory import goto
 from reachy_sdk.trajectory.interpolation import InterpolationMode
+import time
 
 # Remplacez '192.168.X.X' par l'adresse IP de Reachy
 reachy = ReachySDK(host="138.195.196.90")
@@ -49,14 +50,14 @@ def test_bras_gauche() -> None:
 def test_deux_bras() -> None:
     angled_position = {
         reachy.l_arm.l_shoulder_pitch: 0,
-        reachy.l_arm.l_shoulder_roll: 30,
+        reachy.l_arm.l_shoulder_roll: 90,
         reachy.l_arm.l_arm_yaw: 0,
         reachy.l_arm.l_elbow_pitch: 0,
         reachy.l_arm.l_forearm_yaw: 0,
         reachy.l_arm.l_wrist_pitch: 0,
         reachy.l_arm.l_wrist_roll: 0,
         reachy.r_arm.r_shoulder_pitch: 0,
-        reachy.r_arm.r_shoulder_roll: -30,
+        reachy.r_arm.r_shoulder_roll: -90,
         reachy.r_arm.r_arm_yaw: 0,
         reachy.r_arm.r_elbow_pitch: 0,
         reachy.r_arm.r_forearm_yaw: 0,
@@ -71,14 +72,42 @@ def test_deux_bras() -> None:
         interpolation_mode=InterpolationMode.MINIMUM_JERK,
     )
 
+def zero_deux_bras() -> None:
+    zero_angled_position = {
+        reachy.l_arm.l_shoulder_pitch: 0,
+        reachy.l_arm.l_shoulder_roll: 0,
+        reachy.l_arm.l_arm_yaw: 0,
+        reachy.l_arm.l_elbow_pitch: 0,
+        reachy.l_arm.l_forearm_yaw: 0,
+        reachy.l_arm.l_wrist_pitch: 0,
+        reachy.l_arm.l_wrist_roll: 0,
+        reachy.r_arm.r_shoulder_pitch: 0,
+        reachy.r_arm.r_shoulder_roll: 0,
+        reachy.r_arm.r_arm_yaw: 0,
+        reachy.r_arm.r_elbow_pitch: 0,
+        reachy.r_arm.r_forearm_yaw: 0,
+        reachy.r_arm.r_wrist_pitch: 0,
+        reachy.r_arm.r_wrist_roll: 0,
+    }
+    #reachy.turn_on("l_arm")
+    #reachy.turn_on("r_arm")
+    goto(
+        goal_positions=zero_angled_position,
+        duration=1.0,
+        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+    )
 
 
 if __name__ == "__main__":
     #test_bras_droit()
     #test_bras_gauche()
-    #test_deux_bras()
+    test_deux_bras()
+    time.sleep(0.5)
+    zero_deux_bras()
 
     reachy.turn_off_smoothly("r_arm")
     reachy.turn_off_smoothly("l_arm")
     reachy.turn_off_smoothly("head")
+    # reachy.turn_off_smoothly("reachy")
+
 

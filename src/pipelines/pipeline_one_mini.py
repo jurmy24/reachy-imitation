@@ -97,6 +97,7 @@ class Pipeline_one_mini(Pipeline):
 
                 # Draw pose landmarks if available
                 pose_results = self.pose.process(rgb_image)
+
                 if pose_results.pose_landmarks:
                     self.mp_draw.draw_landmarks(
                         color_image,
@@ -230,6 +231,8 @@ class Pipeline_one_mini(Pipeline):
             print(f"Failed to run the recognize human pipeline: {e}")
         finally:
             print("Measurement complete.")
+            cv2.destroyAllWindows()
+
             self.hand_sf = hand_sf
             self.elbow_sf = elbow_sf
             return hand_sf, elbow_sf
@@ -311,7 +314,7 @@ class Pipeline_one_mini(Pipeline):
         smoothing_buffer_size = 5
         position_alpha = 0.4  # For EMA position smoothing
         movement_interval = 0.03  # Send commands at ~30Hz
-        max_change = 3.0  # maximum change in degrees per joint per update
+        max_change = 5.0  # maximum change in degrees per joint per update
         elbow_weight = 0.1
         ########################################
 
@@ -322,7 +325,7 @@ class Pipeline_one_mini(Pipeline):
 
         try:
             # Set torque limits for all motor joints for safety
-            setup_torque_limits(self.reachy, 80.0, side)
+            setup_torque_limits(self.reachy, 70.0, side)
 
             # Initialize the arm(s) for shadowing
             arms_to_process: List[ShadowArm] = []
@@ -353,6 +356,10 @@ class Pipeline_one_mini(Pipeline):
             print("Starting shadowing. Press 'q' to exit safely.")
 
             while not cleanup_requested:
+                # Check for exit key
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    cleanup_requested = True
+
                 loop_start_time = time.time()
 
                 # 1. get data from RealSense camera
@@ -364,20 +371,26 @@ class Pipeline_one_mini(Pipeline):
 
                 # 2. get pose landmarks from the image using mediapipe
                 pose_results = self.pose.process(rgb_image)
+
+                landmarks = pose_results.pose_landmarks
+
+                # Display tracking data if enabled
+                if display:
+                    self.display_frame(side, color_image, landmarks)
+
                 if not pose_results.pose_landmarks:
                     await asyncio.sleep(0.01)
                     continue
-                landmarks = pose_results.pose_landmarks.landmark
 
                 # 3. process each arm
                 for current_arm in arms_to_process:
                     # Update the arm's joint array with current joint positions
-                    current_arm.joint_array = current_arm.get_joint_array()
+                    # current_arm.joint_array = current_arm.get_joint_array()
 
                     # TODO: use the elbow too (for the pipeline_one)
                     # 3a. get coordinates of reachy's hands in reachy's frame
                     shoulder, elbow, hand = current_arm.get_coordinates(
-                        landmarks, depth_frame, w, h, self.intrinsics
+                        landmarks.landmark, depth_frame, w, h, self.intrinsics
                     )
                     if shoulder is None or hand is None:
                         await asyncio.sleep(0.01)
@@ -406,6 +419,8 @@ class Pipeline_one_mini(Pipeline):
                                 elbow_weight,
                             )
                         )
+                    else:
+                        successful_update = False
 
                 # Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
@@ -434,14 +449,6 @@ class Pipeline_one_mini(Pipeline):
                                     print(
                                         f"Error setting position for {joint_name}: {e}"
                                     )
-
-                # Display tracking data if enabled
-                if display:
-                    self.display_frame(side, color_image, landmarks)
-
-                # Check for exit key
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    cleanup_requested = True
 
                 # Ensure we don't hog the CPU
                 elapsed = time.time() - loop_start_time

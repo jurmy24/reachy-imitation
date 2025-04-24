@@ -20,8 +20,9 @@ class ShadowArm:
         self.arm = reachy_arm
         self.side: Literal["right", "left"] = side
         self.prefix = f"{side[0]}_"  # "r_" or "l_"
-        self.landmark_indices = self.get_landmark_indices()
         self.mp_pose = mp_pose
+        self.landmark_indices = self.get_landmark_indices()
+        
 
         # Movement tracking
         self.joint_array = self.get_joint_array()
@@ -162,10 +163,10 @@ class ShadowArm:
             # ! The fact that we're leaving the orientation unchanged might give strange results
             # Set the target position in the transformation matrix
             transform_matrix[:3, 3] = target_position
-
+            
             # Compute IK with current joint positions as starting point
             joint_pos = self.arm.inverse_kinematics(
-                transform_matrix, q0=self.joint_array
+                transform_matrix, q0=self.get_joint_array()
             )
 
             # Get joint names for this arm
