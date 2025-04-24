@@ -26,13 +26,14 @@ async def main():
 
     # Run the main pipeline
     print(f"Tracking {arm} arm(s)...")
-    await pipeline.shadow(side=arm, display=True)
+    pipeline.shadow(side=arm, display=True)
 
     # Example on how to run:
     # python -m src.main
 
 
 if __name__ == "__main__":
-    import asyncio
+    # import asyncio
 
-    asyncio.run(main())
+    # asyncio.run(main())
+    main()

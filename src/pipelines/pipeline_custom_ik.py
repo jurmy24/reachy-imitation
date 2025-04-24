@@ -301,7 +301,7 @@ class Pipeline_custom_ik(Pipeline):
 
         return color_frame, depth_frame, color_image, rgb_image, h, w
 
-    async def shadow(
+    def shadow(
         self, side: Literal["right", "left", "both"] = "right", display: bool = True
     ):
         """
@@ -379,7 +379,6 @@ class Pipeline_custom_ik(Pipeline):
                 timings["camera_acquisition"].append(camera_end - camera_start)
 
                 if camera_data is None:
-                    await asyncio.sleep(0.01)
                     continue
                 color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
@@ -399,7 +398,6 @@ class Pipeline_custom_ik(Pipeline):
                     timings["display"].append(display_end - display_start)
 
                 if not pose_results.pose_landmarks:
-                    await asyncio.sleep(0.01)
                     continue
 
                 # 3. process each arm
@@ -413,7 +411,6 @@ class Pipeline_custom_ik(Pipeline):
                     timings["get_coordinates"].append(coord_end - coord_start)
 
                     if shoulder is None or hand is None:
-                        await asyncio.sleep(0.01)
                         continue
 
                     conv_start = time.time()
@@ -487,16 +484,6 @@ class Pipeline_custom_ik(Pipeline):
                 loop_end_time = time.time()
                 loop_latency = loop_end_time - loop_start_time
                 timings["total_loop"].append(loop_latency)
-
-                # Ensure we don't hog the CPU
-                sleep_start = time.time()
-                elapsed = time.time() - loop_start_time
-                if elapsed < 0.01:  # Try to maintain reasonable loop time
-                    await asyncio.sleep(0.01 - elapsed)
-                else:
-                    await asyncio.sleep(0.001)  # Minimal yield to event loop
-                sleep_end = time.time()
-                timings["sleep"].append(sleep_end - sleep_start)
 
         except Exception as e:
             print(f"Failed to run the shadow pipeline: {e}")
