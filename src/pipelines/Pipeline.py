@@ -24,11 +24,15 @@ class Pipeline(ABC):
         self.align = None
         self.intrinsics = None
         self.mp_draw = None
-        self.hand_sf = None  # scale factor for shoulder to hand length ratio between robot and human (i.e. robot/human)
-        self.elbow_sf = None  # scale factor for shoulder to elbow length ratio between robot and human (i.e. robot/human)
+        # scale factor for shoulder to hand length ratio between robot and human (i.e. robot/human)
+        self.hand_sf = None
+        # scale factor for shoulder to elbow length ratio between robot and human (i.e. robot/human)
+        self.elbow_sf = None
         self.zero_arm_position = get_zero_pos(self.reachy)
-        self.ordered_joint_names_right = get_ordered_joint_names(self.reachy, "right")
-        self.ordered_joint_names_left = get_ordered_joint_names(self.reachy, "left")
+        self.ordered_joint_names_right = get_ordered_joint_names(
+            self.reachy, "right")
+        self.ordered_joint_names_left = get_ordered_joint_names(
+            self.reachy, "left")
 
         self.initialize()
 
@@ -97,4 +101,6 @@ class Pipeline(ABC):
                 )
                 self.reachy.head.look_at(0.5, 0, 0, duration=2.0)
             finally:
-                self.reachy.turn_off_smoothly("reachy")
+                self.reachy.turn_off_smoothly("r_arm")
+                self.reachy.turn_off_smoothly("l_arm")
+                self.reachy.turn_off_smoothly("head")

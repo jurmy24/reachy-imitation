@@ -101,9 +101,9 @@ def zero_deux_bras() -> None:
 if __name__ == "__main__":
     #test_bras_droit()
     #test_bras_gauche()
-    test_deux_bras()
-    time.sleep(0.5)
-    zero_deux_bras()
+    #test_deux_bras()
+    #time.sleep(0.5)
+    #zero_deux_bras()
 
     reachy.turn_off_smoothly("r_arm")
     reachy.turn_off_smoothly("l_arm")
