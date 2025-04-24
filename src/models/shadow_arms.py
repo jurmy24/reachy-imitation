@@ -132,8 +132,7 @@ class ShadowArm:
         # Check if the desired position is different from current position
         current_ee_pose_matrix = self.arm.forward_kinematics()
         current_pos = current_ee_pose_matrix[:3, 3]
-        already_at_position = np.allclose(
-            current_pos, smoothed_position, atol=0.03)
+        already_at_position = np.allclose(current_pos, smoothed_position, atol=0.03)
 
         # Check if the position has changed significantly from the previous position
         should_update_position = (
@@ -184,8 +183,7 @@ class ShadowArm:
             for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
                 # Apply rate limiting
                 limited_change = np.clip(
-                    value - self.joint_array[i], -
-                    self.max_change, self.max_change
+                    value - self.joint_array[i], -self.max_change, self.max_change
                 )
                 self.joint_array[i] += limited_change
                 self.joint_dict[name] = self.joint_array[i]
@@ -246,8 +244,7 @@ class ShadowArm:
             for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
                 # Apply rate limiting
                 limited_change = np.clip(
-                    value - self.joint_array[i], -
-                    self.max_change, self.max_change
+                    value - self.joint_array[i], -self.max_change, self.max_change
                 )
                 self.joint_array[i] += limited_change
                 self.joint_dict[name] = self.joint_array[i]
