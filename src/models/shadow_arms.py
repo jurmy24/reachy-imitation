@@ -224,7 +224,9 @@ class ShadowArm:
                 elbow_position=target_elbow_position,
                 initial_guess=self.joint_array,
                 elbow_weight=elbow_weight,
-                L=["reachy", 0.28, 0.25, 0.075],
+                who="reachy"
+                length=[0.28, 0.25, 0.075],
+                side=self.side,
             )
 
             # Get joint names for this arm
