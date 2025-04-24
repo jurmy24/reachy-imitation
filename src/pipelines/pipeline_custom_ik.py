@@ -317,6 +317,8 @@ class Pipeline_custom_ik(Pipeline):
         movement_interval = 0.03  # Send commands at ~30Hz
         max_change = 5.0  # maximum change in degrees per joint per update
         elbow_weight = 0.1
+        target_pos_tolerance = 0.02
+        movement_min_tolerance = 0.03
         ########################################
 
         ############### FLAGS ##################

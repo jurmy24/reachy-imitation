@@ -9,7 +9,7 @@ reachy = ReachySDK(host="138.195.196.90")
 
 async def main():
     calibrate = False
-    arm = "left"
+    arm = "right"
 
     pipeline = Pipeline_custom_ik(reachy)
     if calibrate:

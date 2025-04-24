@@ -97,7 +97,7 @@ class Pipeline_one_mini(Pipeline):
 
                 # Draw pose landmarks if available
                 pose_results = self.pose.process(rgb_image)
-
+                
                 if pose_results.pose_landmarks:
                     self.mp_draw.draw_landmarks(
                         color_image,
@@ -263,7 +263,7 @@ class Pipeline_one_mini(Pipeline):
                 pose_landmarks,
                 self.mp_pose.POSE_CONNECTIONS,
             )
-
+        
         # Set window title based on which arm(s) is being tracked
         window_title = "RealSense "
         if arm == "right":
@@ -315,7 +315,6 @@ class Pipeline_one_mini(Pipeline):
         position_alpha = 0.4  # For EMA position smoothing
         movement_interval = 0.03  # Send commands at ~30Hz
         max_change = 5.0  # maximum change in degrees per joint per update
-        elbow_weight = 0.1
         ########################################
 
         ############### FLAGS ##################
@@ -359,7 +358,7 @@ class Pipeline_one_mini(Pipeline):
                 # Check for exit key
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     cleanup_requested = True
-
+                
                 loop_start_time = time.time()
 
                 # 1. get data from RealSense camera
@@ -371,9 +370,9 @@ class Pipeline_one_mini(Pipeline):
 
                 # 2. get pose landmarks from the image using mediapipe
                 pose_results = self.pose.process(rgb_image)
-
+                
                 landmarks = pose_results.pose_landmarks
-
+                
                 # Display tracking data if enabled
                 if display:
                     self.display_frame(side, color_image, landmarks)
@@ -382,10 +381,11 @@ class Pipeline_one_mini(Pipeline):
                     await asyncio.sleep(0.01)
                     continue
 
+
                 # 3. process each arm
                 for current_arm in arms_to_process:
                     # Update the arm's joint array with current joint positions
-                    # current_arm.joint_array = current_arm.get_joint_array()
+                    #current_arm.joint_array = current_arm.get_joint_array()
 
                     # TODO: use the elbow too (for the pipeline_one)
                     # 3a. get coordinates of reachy's hands in reachy's frame
@@ -400,10 +400,6 @@ class Pipeline_one_mini(Pipeline):
                         hand, shoulder, self.hand_sf, current_arm.side
                     )
 
-                    target_elbow_coord = get_reachy_coordinates(
-                        elbow, shoulder, self.elbow_sf, current_arm.side
-                    )
-
                     # TODO: Check if the target end effector coordinates are within reachy's reach
                     # 3b. Process the new ee_position and calculate IK if needed
                     should_update, target_ee_coord_smoothed = (
@@ -411,19 +407,14 @@ class Pipeline_one_mini(Pipeline):
                     )
 
                     if should_update:
-                        # ! We're not smoothing the elbow position here
                         # Calculate IK and update joint positions
-                        successful_update = (
-                            current_arm.calculate_joint_positions_custom_ik(
-                                target_ee_coord_smoothed,
-                                target_elbow_coord,
-                                elbow_weight,
-                            )
+                        successful_update = current_arm.calculate_joint_positions(
+                            target_ee_coord_smoothed
                         )
-                    else:
+                    else: 
                         successful_update = False
 
-                # Apply goal positions directly at controlled rate (maximum 30Hz)
+                # Apply goal positions directly at controlled rate
                 current_time = time.time()
                 if (
                     current_time - last_movement_time >= movement_interval
@@ -450,6 +441,8 @@ class Pipeline_one_mini(Pipeline):
                                     print(
                                         f"Error setting position for {joint_name}: {e}"
                                     )
+
+                
 
                 # Ensure we don't hog the CPU
                 elapsed = time.time() - loop_start_time
