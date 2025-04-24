@@ -323,6 +323,12 @@ class Pipeline_custom_ik(Pipeline):
         successful_update = False
         ########################################
 
+        # Timing metrics
+        update_times = []
+        loop_latencies = []
+        last_print_time = time.time()
+        update_count = 0
+
         try:
             # Set torque limits for all motor joints for safety
             setup_torque_limits(self.reachy, 70.0, side)
@@ -430,6 +436,8 @@ class Pipeline_custom_ik(Pipeline):
                     and successful_update
                 ):
                     last_movement_time = current_time
+                    update_times.append(current_time)
+                    update_count += 1
 
                     # Apply joint positions for all arms that have updates
                     for current_arm in arms_to_process:
@@ -451,6 +459,43 @@ class Pipeline_custom_ik(Pipeline):
                                         f"Error setting position for {joint_name}: {e}"
                                     )
 
+                # Calculate loop latency
+                loop_end_time = time.time()
+                loop_latency = loop_end_time - loop_start_time
+                loop_latencies.append(loop_latency)
+
+                # Print metrics every second
+                if current_time - last_print_time >= 1.0:
+                    # Calculate update frequency
+                    if len(update_times) >= 2:
+                        time_diffs = np.diff(update_times)
+                        if len(time_diffs) > 0:
+                            avg_update_interval = np.mean(time_diffs)
+                            update_frequency = (
+                                1.0 / avg_update_interval
+                                if avg_update_interval > 0
+                                else 0
+                            )
+                        else:
+                            update_frequency = 0
+                    else:
+                        update_frequency = 0
+
+                    # Calculate average loop latency
+                    avg_loop_latency = np.mean(loop_latencies) if loop_latencies else 0
+
+                    print(
+                        f"Update frequency: {update_frequency:.2f} Hz (updates: {update_count})"
+                    )
+                    print(f"Average loop latency: {avg_loop_latency*1000:.2f} ms")
+
+                    # Reset for next second
+                    last_print_time = current_time
+                    update_times = update_times[
+                        -100:
+                    ]  # Keep only recent updates for memory efficiency
+                    loop_latencies = loop_latencies[-100:]  # Keep only recent latencies
+
                 # Ensure we don't hog the CPU
                 elapsed = time.time() - loop_start_time
                 if elapsed < 0.01:  # Try to maintain reasonable loop time
@@ -460,4 +505,19 @@ class Pipeline_custom_ik(Pipeline):
         except Exception as e:
             print(f"Failed to run the shadow pipeline: {e}")
         finally:
+            # Print final statistics
+            if update_times and len(update_times) >= 2:
+                time_diffs = np.diff(update_times)
+                avg_update_interval = np.mean(time_diffs)
+                update_frequency = (
+                    1.0 / avg_update_interval if avg_update_interval > 0 else 0
+                )
+                print(f"Final statistics:")
+                print(f"Update frequency: {update_frequency:.2f} Hz")
+                print(f"Total updates: {update_count}")
+                if loop_latencies:
+                    print(f"Min loop latency: {min(loop_latencies)*1000:.2f} ms")
+                    print(f"Max loop latency: {max(loop_latencies)*1000:.2f} ms")
+                    print(f"Avg loop latency: {np.mean(loop_latencies)*1000:.2f} ms")
+
             self.cleanup()
