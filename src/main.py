@@ -9,13 +9,14 @@ reachy = ReachySDK(host="138.195.196.90")
 
 async def main():
     calibrate = False
-    arm = "both"
+    arm = "left"
 
     pipeline = Pipeline_one_mini(reachy)
     if calibrate:
         print("Running initiation protocol...")
         pipeline.initiation_protocol()
-        print(f"Calibrated. Hand SF: {pipeline.hand_sf}, Elbow SF: {pipeline.elbow_sf}")
+        print(
+            f"Calibrated. Hand SF: {pipeline.hand_sf}, Elbow SF: {pipeline.elbow_sf}")
     else:
         print("Using default scale factors")
         hand_sf, elbow_sf = get_scale_factors(
@@ -27,7 +28,7 @@ async def main():
     # Run the main pipeline
     print(f"Tracking {arm} arm(s)...")
     await pipeline.shadow(side=arm, display=True)
-    #pipeline.cleanup()
+    # pipeline.cleanup()
 
     # Example on how to run:
     # python -m src.main

@@ -399,6 +399,7 @@ class Pipeline_one_mini(Pipeline):
                     target_ee_coord = get_reachy_coordinates(
                         hand, shoulder, self.hand_sf, current_arm.side
                     )
+
                     target_elbow_coord = get_reachy_coordinates(
                         elbow, shoulder, self.elbow_sf, current_arm.side
                     )

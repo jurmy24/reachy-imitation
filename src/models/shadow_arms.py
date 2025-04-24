@@ -22,7 +22,6 @@ class ShadowArm:
         self.prefix = f"{side[0]}_"  # "r_" or "l_"
         self.mp_pose = mp_pose
         self.landmark_indices = self.get_landmark_indices()
-        
 
         # Movement tracking
         self.joint_array = self.get_joint_array()
@@ -133,7 +132,8 @@ class ShadowArm:
         # Check if the desired position is different from current position
         current_ee_pose_matrix = self.arm.forward_kinematics()
         current_pos = current_ee_pose_matrix[:3, 3]
-        already_at_position = np.allclose(current_pos, smoothed_position, atol=0.03)
+        already_at_position = np.allclose(
+            current_pos, smoothed_position, atol=0.03)
 
         # Check if the position has changed significantly from the previous position
         should_update_position = (
@@ -163,7 +163,7 @@ class ShadowArm:
             # ! The fact that we're leaving the orientation unchanged might give strange results
             # Set the target position in the transformation matrix
             transform_matrix[:3, 3] = target_position
-            
+
             # Compute IK with current joint positions as starting point
             joint_pos = self.arm.inverse_kinematics(
                 transform_matrix, q0=self.get_joint_array()
@@ -184,7 +184,8 @@ class ShadowArm:
             for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
                 # Apply rate limiting
                 limited_change = np.clip(
-                    value - self.joint_array[i], -self.max_change, self.max_change
+                    value - self.joint_array[i], -
+                    self.max_change, self.max_change
                 )
                 self.joint_array[i] += limited_change
                 self.joint_dict[name] = self.joint_array[i]
@@ -225,7 +226,7 @@ class ShadowArm:
                 elbow_position=target_elbow_position,
                 initial_guess=self.joint_array,
                 elbow_weight=elbow_weight,
-                who="reachy"
+                who="reachy",
                 length=[0.28, 0.25, 0.075],
                 side=self.side,
             )
@@ -245,7 +246,8 @@ class ShadowArm:
             for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
                 # Apply rate limiting
                 limited_change = np.clip(
-                    value - self.joint_array[i], -self.max_change, self.max_change
+                    value - self.joint_array[i], -
+                    self.max_change, self.max_change
                 )
                 self.joint_array[i] += limited_change
                 self.joint_dict[name] = self.joint_array[i]

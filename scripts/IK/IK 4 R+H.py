@@ -90,42 +90,60 @@ def cost_function(joint_angles, hand_position, elbow_position, elbow_weight, who
     return total_cost
 
 
-def inverse_kinematics(hand_position, elbow_position, initial_guess, elbow_weight=0.1,  who="reachy", length=[0.28, 0.25, 0.075], side='right'):
+def inverse_kinematics(hand_position, elbow_position, initial_guess, elbow_weight=0.1,
+                       who="reachy", length=[0.28, 0.25, 0.075], side='right'):
     pi = np.pi
     joint_limits = [(-1.0 * pi,  0.5 * pi), (-1.0 * pi,  10/180 * pi),
                     (-0.5 * pi,  0.5 * pi), (-125/180 * pi,  0), (0, 0), (0, 0), (0, 0)]
-    # joint_limits = [(-1.0 * pi,  0.5 * pi), (-1.0 * pi,  10/180 * pi), (-0.5 * pi,  0.5 * pi), (-125/180 * pi,  0), (-100/180 * pi,  100/180 * pi), (-0.25 * pi,  0.25 * pi), (-0.25 * pi,  0.25 * pi)]
 
-    result = minimize(cost_function, initial_guess, args=(
-        hand_position, elbow_position, elbow_weight, who, length, side), method='SLSQP', bounds=joint_limits)
-
-    return result.x
+    if side == "both":
+        results = {}
+        for s in ['left', 'right']:
+            result = minimize(cost_function, initial_guess[s], args=(
+                hand_position[s], elbow_position[s], elbow_weight, who, length, s),
+                method='SLSQP', bounds=joint_limits)
+            results[s] = result.x
+        return results
+    else:
+        result = minimize(cost_function, initial_guess, args=(
+            hand_position, elbow_position, elbow_weight, who, length, side),
+            method='SLSQP', bounds=joint_limits)
+        return result.x
 
 
 if __name__ == "__main__":
-
-    # Desired hand position
-    hand_position = np.array([0.3, 0.2, 0.1])
-
-    # Elbow position and weight
-    elbow_position = np.array([0.1, 0, -0.3])
-    elbow_weight = 1
-
-    # Initial guess for joint angles
-    # you should use previous position if you have one
-    initial_guess = np.array([0.1, 0.3, 0.1, 0.1, 0, 0, 0])
-
-    # If you use reachy or human
-    # length=[length between shoulder and elbow, length between elbow and wrist, length between wrist and center of the hand]
+    # Example for using both arms
+    side = "both"
     who = "reachy"
     length = [0.28, 0.25, 0.075]
-    side = 'right'
+    elbow_weight = 0
+
+    hand_position = {
+        "right": np.array([0.3, -0.2, 0.1]),
+        "left": np.array([0.3, 0.2, 0.1])
+    }
+
+    elbow_position = {
+        "right": np.array([0.1, -0.1, -0.3]),
+        "left": np.array([0.1, 0.1, -0.3])
+    }
+
+    initial_guess = {
+        "right": np.array([0.1, 0.3, 0.1, 0.1, 0, 0, 0]),
+        "left": np.array([0.1, 0.3, 0.1, 0.1, 0, 0, 0])
+    }
 
     joint_angles = inverse_kinematics(
         hand_position, elbow_position, initial_guess, elbow_weight, who, length, side)
 
-    print("Joint Angles:", joint_angles)
-    print("Elbow-Effector Position:",
-          forward_kinematics(joint_angles, who, length, side)[0])
-    print("Hand-Effector Position:",
-          forward_kinematics(joint_angles, who, length, side)[1])
+    print("Joint Angles Right:", joint_angles["right"])
+    print("Right Arm Elbow-Effector Position:",
+          forward_kinematics(joint_angles["right"], who, length, "right")[0])
+    print("Right Arm Hand-Effector Position:",
+          forward_kinematics(joint_angles["right"], who, length, "right")[1])
+
+    print("Joint Angles Left:", joint_angles["left"])
+    print("Left Arm Elbow-Effector Position:",
+          forward_kinematics(joint_angles["left"], who, length, "left")[0])
+    print("Left Arm Hand-Effector Position:",
+          forward_kinematics(joint_angles["left"], who, length, "left")[1])

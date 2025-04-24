@@ -143,7 +143,7 @@ if __name__ == "__main__":
 
     # Elbow position and weight
     elbow_position = np.array([0.1, 0, -0.3])
-    elbow_weight = 1
+    elbow_weight = 0
 
     # Initial guess for joint angles
     # you should use previous position if you have one
