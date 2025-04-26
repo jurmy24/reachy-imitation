@@ -2,7 +2,6 @@ import time
 from typing import List, Literal
 import numpy as np
 import cv2
-import asyncio
 from reachy_sdk.trajectory import goto
 from reachy_sdk.trajectory.interpolation import InterpolationMode
 from collections import defaultdict
@@ -319,6 +318,7 @@ class Pipeline_custom_ik(Pipeline):
         elbow_weight = 0.1
         target_pos_tolerance = 0.02
         movement_min_tolerance = 0.03
+        torque_limit = 80.0  # as a percentage of maximum
         ########################################
 
         ############### FLAGS ##################
@@ -333,7 +333,7 @@ class Pipeline_custom_ik(Pipeline):
 
         try:
             # Set torque limits for all motor joints for safety
-            setup_torque_limits(self.reachy, 70.0, side)
+            setup_torque_limits(self.reachy, torque_limit, side)
 
             # Initialize the arm(s) for shadowing
             arms_to_process: List[ShadowArm] = []
@@ -427,7 +427,11 @@ class Pipeline_custom_ik(Pipeline):
                     # 3b. Process the new ee_position and calculate IK if needed
                     pos_proc_start = time.time()
                     should_update, target_ee_coord_smoothed = (
-                        current_arm.process_new_position(target_ee_coord)
+                        current_arm.process_new_position(
+                            target_ee_coord,
+                            target_pos_tolerance,
+                            movement_min_tolerance,
+                        )
                     )
                     pos_proc_end = time.time()
                     timings["position_processing"].append(pos_proc_end - pos_proc_start)

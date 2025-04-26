@@ -105,7 +105,10 @@ class ShadowArm:
         )
 
     def process_new_position(
-        self, target_ee_coord: np.ndarray
+        self,
+        target_ee_coord: np.ndarray,
+        target_pos_tolerance: float = 0.03,
+        movement_min_tolerance: float = 0.02,
     ) -> Tuple[bool, np.ndarray]:
         """Process a new target end effector position and determine if movement is needed
 
@@ -132,11 +135,15 @@ class ShadowArm:
         # Check if the desired position is different from current position
         current_ee_pose_matrix = self.arm.forward_kinematics()
         current_pos = current_ee_pose_matrix[:3, 3]
-        already_at_position = np.allclose(current_pos, smoothed_position, atol=0.03)
+        already_at_position = np.allclose(
+            current_pos, smoothed_position, atol=target_pos_tolerance
+        )
 
         # Check if the position has changed significantly from the previous position
         should_update_position = (
-            not np.allclose(self.prev_hand_pos, smoothed_position, atol=0.02)
+            not np.allclose(
+                self.prev_hand_pos, smoothed_position, atol=movement_min_tolerance
+            )
             and not already_at_position
         )
 
