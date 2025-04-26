@@ -167,8 +167,12 @@ def inverse_kinematics_fixed_wrist(
         cost_function,
         initial_guess_rad,  # Use radian value for optimization
         args=(hand_position, elbow_position, elbow_weight, who, length, side),
-        method="SLSQP",
+        # method="SLSQP",
+        method="L-BFGS-B",
         bounds=joint_limits,
+        # NOTE: these are new
+        tol=1e-3,  # Higher tolerance = faster but less accurate
+        options={"maxiter": 20},
     )
 
     # Convert result from radians to degrees
