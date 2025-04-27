@@ -401,27 +401,20 @@ def get_reachy_coordinates(point, shoulder, sf, side="right"):
 
 
 def entry_point(
-    landmarks: landmark_pb2.NormalizedLandmarkList,
-    depth_frame: rs.depth_frame,
-    height: int,
-    width: int,
-    intrinsics: rs.intrinsics,
-    mp_pose,
-    side: Literal["right", "left"],
+    human_shoulder_coords: np.ndarray,
+    human_elbow_coords: np.ndarray,
+    human_hand_coords: np.ndarray,
     current_joint_array: np.ndarray,
+    side: Literal["right", "left"],
     position_history: list | None = None,
 ) -> Tuple[bool, Dict[str, float]]:
     """
     Process 3D pose data to generate joint positions for a robotic arm.
 
     Parameters:
-        landmarks: NormalizedLandmarkList containing detected body keypoints from MediaPipe
-        depth_frame: RealSense depth frame providing distance information
-        height: Height of the camera image in pixels
-        width: Width of the camera image in pixels
-        intrinsics: RealSense camera intrinsic parameters for 3D coordinate calculation
-        mp_pose: MediaPipe pose module for landmark identification
-        side: Which arm to process ("right" or "left")
+        human_shoulder_coords: The shoulder coordinates in depth camera frame
+        human_elbow_coords: The elbow coordinates in depth camera frame
+        human_hand_coords: The hand coordinates in depth camera frame
         current_joint_array: Current joint angles (degrees)
         position_history: List of recent positions for smoothing
 
@@ -434,12 +427,6 @@ def entry_point(
     converts them to the robot's coordinate system, and calculates inverse kinematics
     to determine joint angles needed to position the arm.
     """
-    # Get shoulder, elbow, and ee coordinates from landmarks
-    landmark_indices = get_landmark_indices(side, mp_pose)
-    human_shoulder_coords, human_elbow_coords, human_hand_coords = get_arm_coordinates(
-        landmarks.landmark, landmark_indices, depth_frame, width, height, intrinsics
-    )
-
     if human_shoulder_coords is None or human_hand_coords is None:
         return False, {}
 
