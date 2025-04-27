@@ -122,6 +122,7 @@ class ShadowArm:
         """
         # TODO: this is currently replacing a Kalman filter
         # Apply position smoothing
+        # ! We're never actually using the position history
         self.position_history.append(target_ee_coord)
         if len(self.position_history) > self.smoothing_buffer_size:
             self.position_history.pop(0)
