@@ -6,23 +6,23 @@ from collections import deque
 
 class MinimizeTimer:
     """Class to track timing statistics for the minimize function."""
-    
+
     def __init__(self, max_samples=1000):
         self.times = deque(maxlen=max_samples)
         self.total_time = 0
         self.calls = 0
-    
+
     def start(self):
         """Start timing a minimize call."""
         self.start_time = time.time()
-    
+
     def stop(self):
         """Stop timing a minimize call and record the result."""
         elapsed = time.time() - self.start_time
         self.times.append(elapsed)
         self.total_time += elapsed
         self.calls += 1
-    
+
     def get_stats(self):
         """Get statistics about the minimize function calls."""
         if not self.times:
@@ -31,15 +31,15 @@ class MinimizeTimer:
                 "min_time": 0,
                 "max_time": 0,
                 "total_time": 0,
-                "calls": 0
+                "calls": 0,
             }
-        
+
         return {
             "avg_time": sum(self.times) / len(self.times),
             "min_time": min(self.times),
             "max_time": max(self.times),
             "total_time": self.total_time,
-            "calls": self.calls
+            "calls": self.calls,
         }
 
 
@@ -135,17 +135,15 @@ def cost_function(
     """
     Compute the cost function that includes hand-effector and elbow position errors.
     """
-    # Compute the hand position
-    _, current_position = forward_kinematics(joint_angles, who, length, side)
-    hand_effector_error = np.linalg.norm(hand_position - current_position)
-
-    # Compute the elbow position
-    T04, _ = compute_transformation_matrices(joint_angles, who, length, side)
-    elbow_position_actual = np.array(T04[0:3, 3], dtype=np.float64).flatten()
-    elbow_error = np.linalg.norm(elbow_position_actual - elbow_position)
+    # Compute the
+    current_elbow_coords, current_ee_coords = forward_kinematics(
+        joint_angles, who, length, side
+    )
+    ee_error = np.linalg.norm(current_ee_coords - hand_position)
+    elbow_error = np.linalg.norm(current_elbow_coords - elbow_position)
 
     # Compute the total cost
-    total_cost = hand_effector_error + elbow_weight * elbow_error
+    total_cost = ee_error + elbow_weight * elbow_error
     return total_cost
 
 
@@ -172,7 +170,7 @@ def inverse_kinematics(
 
     # Start timing
     minimize_timer.start()
-    
+
     result = minimize(
         cost_function,
         initial_guess,
@@ -180,11 +178,12 @@ def inverse_kinematics(
         method="SLSQP",
         bounds=joint_limits,
     )
-    
+
     # Stop timing
     minimize_timer.stop()
 
     return result.x
+
 
 def jac(joint_angles, hand_position, elbow_position, elbow_weight, who, length, side):
     eps = 1e-3
@@ -192,8 +191,28 @@ def jac(joint_angles, hand_position, elbow_position, elbow_weight, who, length, 
     for i in range(len(joint_angles)):
         Eps = np.zeros(len(joint_angles))
         Eps[i] = eps
-        jac[i] = (cost_function(joint_angles+Eps, hand_position, elbow_position, elbow_weight, who, length, side) - cost_function(joint_angles, hand_position, elbow_position, elbow_weight, who, length, side))/eps
+        jac[i] = (
+            cost_function(
+                joint_angles + Eps,
+                hand_position,
+                elbow_position,
+                elbow_weight,
+                who,
+                length,
+                side,
+            )
+            - cost_function(
+                joint_angles,
+                hand_position,
+                elbow_position,
+                elbow_weight,
+                who,
+                length,
+                side,
+            )
+        ) / eps
     return jac
+
 
 def inverse_kinematics_fixed_wrist(
     hand_position,
@@ -224,7 +243,7 @@ def inverse_kinematics_fixed_wrist(
 
     # Start timing
     minimize_timer.start()
-    
+
     result = minimize(
         cost_function,
         initial_guess_rad,  # Use radian value for optimization
@@ -232,12 +251,10 @@ def inverse_kinematics_fixed_wrist(
         args=(hand_position, elbow_position, elbow_weight, who, length, side),
         method="SLSQP",
         bounds=joint_limits,
-        # ! Provide the Jacobian matrix
-        # NOTE: these are new
         tol=1e-2,  # Higher tolerance
         options={"maxiter": 20},
     )
-    
+
     # Stop timing
     minimize_timer.stop()
 
@@ -263,12 +280,12 @@ if __name__ == "__main__":
     who = "reachy"
     length = [0.28, 0.25, 0.075]
     side = "right"
-    
+
     # Run a test and print the timing statistics
     result = inverse_kinematics_fixed_wrist(
         hand_position, elbow_position, initial_guess, elbow_weight, who, length, side
     )
-    
+
     # Print timing statistics
     stats = minimize_timer.get_stats()
     print("\n===== MINIMIZE FUNCTION TIMING STATISTICS =====")
