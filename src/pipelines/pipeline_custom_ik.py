@@ -14,6 +14,7 @@ from src.sensing.extract_3D_points import get_head_coordinates
 from config.CONSTANTS import get_zero_pos
 from src.reachy.utils import setup_torque_limits
 from src.models.shadow_arms import ShadowArm
+from src.models.custom_ik import minimize_timer  # Import the timer
 
 
 class Pipeline_custom_ik(Pipeline):
@@ -454,6 +455,7 @@ class Pipeline_custom_ik(Pipeline):
                         ik_end = time.time()
                         timings["inverse_kinematics"].append(ik_end - ik_start)
                     else:
+                        print("Inverse kinematics skipped!")
                         successful_update = False
 
                 # Apply goal positions directly at controlled rate (maximum 30Hz)
@@ -545,5 +547,16 @@ class Pipeline_custom_ik(Pipeline):
                     print(
                         f"Target update rate: {1/movement_interval:.1f} Hz (movement_interval={movement_interval}s)"
                     )
+            
+            # Print minimize function timing statistics
+            minimize_stats = minimize_timer.get_stats()
+            if minimize_stats["calls"] > 0:
+                print("\n===== MINIMIZE FUNCTION TIMING STATISTICS =====")
+                print(f"Total calls: {minimize_stats['calls']}")
+                print(f"Average time: {minimize_stats['avg_time']*1000:.2f} ms")
+                print(f"Min time: {minimize_stats['min_time']*1000:.2f} ms")
+                print(f"Max time: {minimize_stats['max_time']*1000:.2f} ms")
+                print(f"Total time: {minimize_stats['total_time']*1000:.2f} ms")
+                print(f"Percentage of total loop time: {(minimize_stats['total_time'] / sum(timings['total_loop']) * 100):.1f}%")
 
             self.cleanup()

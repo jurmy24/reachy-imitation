@@ -1,5 +1,50 @@
 import numpy as np
 from scipy.optimize import minimize
+import time
+from collections import deque
+
+
+class MinimizeTimer:
+    """Class to track timing statistics for the minimize function."""
+    
+    def __init__(self, max_samples=1000):
+        self.times = deque(maxlen=max_samples)
+        self.total_time = 0
+        self.calls = 0
+    
+    def start(self):
+        """Start timing a minimize call."""
+        self.start_time = time.time()
+    
+    def stop(self):
+        """Stop timing a minimize call and record the result."""
+        elapsed = time.time() - self.start_time
+        self.times.append(elapsed)
+        self.total_time += elapsed
+        self.calls += 1
+    
+    def get_stats(self):
+        """Get statistics about the minimize function calls."""
+        if not self.times:
+            return {
+                "avg_time": 0,
+                "min_time": 0,
+                "max_time": 0,
+                "total_time": 0,
+                "calls": 0
+            }
+        
+        return {
+            "avg_time": sum(self.times) / len(self.times),
+            "min_time": min(self.times),
+            "max_time": max(self.times),
+            "total_time": self.total_time,
+            "calls": self.calls
+        }
+
+
+# Create a global timer instance
+minimize_timer = MinimizeTimer()
 
 
 def mattransfo(alpha, d, theta, r):
@@ -125,6 +170,9 @@ def inverse_kinematics(
         (-0.25 * pi, 0.25 * pi),
     ]
 
+    # Start timing
+    minimize_timer.start()
+    
     result = minimize(
         cost_function,
         initial_guess,
@@ -132,9 +180,20 @@ def inverse_kinematics(
         method="SLSQP",
         bounds=joint_limits,
     )
+    
+    # Stop timing
+    minimize_timer.stop()
 
     return result.x
 
+def jac(joint_angles, hand_position, elbow_position, elbow_weight, who, length, side):
+    eps = 1e-3
+    jac = np.zeros((len(joint_angles)))
+    for i in range(len(joint_angles)):
+        Eps = np.zeros(len(joint_angles))
+        Eps[i] = eps
+        jac[i] = (cost_function(joint_angles+Eps, hand_position, elbow_position, elbow_weight, who, length, side) - cost_function(joint_angles, hand_position, elbow_position, elbow_weight, who, length, side))/eps
+    return jac
 
 def inverse_kinematics_fixed_wrist(
     hand_position,
@@ -163,17 +222,24 @@ def inverse_kinematics_fixed_wrist(
         (0, 0),
     ]
 
+    # Start timing
+    minimize_timer.start()
+    
     result = minimize(
         cost_function,
         initial_guess_rad,  # Use radian value for optimization
+        jac=jac,
         args=(hand_position, elbow_position, elbow_weight, who, length, side),
-        # method="SLSQP",
-        method="L-BFGS-B",
+        method="SLSQP",
         bounds=joint_limits,
+        # ! Provide the Jacobian matrix
         # NOTE: these are new
-        tol=1e-3,  # Higher tolerance = faster but less accurate
+        tol=1e-2,  # Higher tolerance
         options={"maxiter": 20},
     )
+    
+    # Stop timing
+    minimize_timer.stop()
 
     # Convert result from radians to degrees
     return np.rad2deg(result.x)
@@ -197,17 +263,17 @@ if __name__ == "__main__":
     who = "reachy"
     length = [0.28, 0.25, 0.075]
     side = "right"
-
-    joint_angles = inverse_kinematics(
+    
+    # Run a test and print the timing statistics
+    result = inverse_kinematics_fixed_wrist(
         hand_position, elbow_position, initial_guess, elbow_weight, who, length, side
     )
-
-    print("Joint Angles:", joint_angles)
-    print(
-        "Elbow-Effector Position:",
-        forward_kinematics(joint_angles, who, length, side)[0],
-    )
-    print(
-        "Hand-Effector Position:",
-        forward_kinematics(joint_angles, who, length, side)[1],
-    )
+    
+    # Print timing statistics
+    stats = minimize_timer.get_stats()
+    print("\n===== MINIMIZE FUNCTION TIMING STATISTICS =====")
+    print(f"Total calls: {stats['calls']}")
+    print(f"Average time: {stats['avg_time']*1000:.2f} ms")
+    print(f"Min time: {stats['min_time']*1000:.2f} ms")
+    print(f"Max time: {stats['max_time']*1000:.2f} ms")
+    print(f"Total time: {stats['total_time']*1000:.2f} ms")
