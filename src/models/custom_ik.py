@@ -130,7 +130,7 @@ def forward_kinematics(
 
 
 def cost_function(
-    joint_angles, hand_position, elbow_position, elbow_weight, who, length, side
+    joint_angles, target_ee_coords, target_elbow_coords, elbow_weight, who, length, side
 ):
     """
     Compute the cost function that includes hand-effector and elbow position errors.
@@ -139,8 +139,8 @@ def cost_function(
     current_elbow_coords, current_ee_coords = forward_kinematics(
         joint_angles, who, length, side
     )
-    ee_error = np.linalg.norm(current_ee_coords - hand_position)
-    elbow_error = np.linalg.norm(current_elbow_coords - elbow_position)
+    ee_error = np.linalg.norm(current_ee_coords - target_ee_coords)
+    elbow_error = np.linalg.norm(current_elbow_coords - target_elbow_coords)
 
     # Compute the total cost
     total_cost = ee_error + elbow_weight * elbow_error
@@ -185,6 +185,7 @@ def inverse_kinematics(
     return result.x
 
 
+# ! This is actually the gradient of the cost function, not the jacobian
 def jac(joint_angles, hand_position, elbow_position, elbow_weight, who, length, side):
     eps = 1e-3
     jac = np.zeros((len(joint_angles)))
@@ -215,8 +216,8 @@ def jac(joint_angles, hand_position, elbow_position, elbow_weight, who, length, 
 
 
 def inverse_kinematics_fixed_wrist(
-    hand_position,
-    elbow_position,
+    ee_coords,
+    elbow_coords,
     initial_guess,
     elbow_weight=0.1,
     who="reachy",
@@ -248,7 +249,7 @@ def inverse_kinematics_fixed_wrist(
         cost_function,
         initial_guess_rad,  # Use radian value for optimization
         jac=jac,
-        args=(hand_position, elbow_position, elbow_weight, who, length, side),
+        args=(ee_coords, elbow_coords, elbow_weight, who, length, side),
         method="SLSQP",
         bounds=joint_limits,
         tol=1e-2,  # Higher tolerance

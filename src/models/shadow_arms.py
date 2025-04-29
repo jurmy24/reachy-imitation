@@ -152,6 +152,7 @@ class ShadowArm:
         if should_update_position:
             self.prev_hand_pos = smoothed_position
 
+        # ! We're always updating now and never skipping
         return True, smoothed_position
 
     def calculate_joint_positions(self, target_position: np.ndarray) -> bool:
@@ -213,19 +214,20 @@ class ShadowArm:
         """Calculate new joint positions using inverse kinematics
 
         Args:
-            target_position: The target hand position
+            target_ee_position: The target hand position
+            target_elbow_position: The target elbow position
+            elbow_weight: The weight of the elbow in the IK calculation
 
         Returns:
             bool: True if calculation was successful
         """
         try:
             # Get the current transformation matrix
-            #transform_matrix = self.arm.forward_kinematics()
+            # transform_matrix = self.arm.forward_kinematics()
 
             # ! The fact that we're leaving the orientation unchanged might give strange results
             # Set the target position in the transformation matrix
-            #transform_matrix[:3, 3] = target_ee_position
-            
+            # transform_matrix[:3, 3] = target_ee_position
 
             # Compute IK
             joint_pos = inverse_kinematics_fixed_wrist(
