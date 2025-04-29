@@ -268,7 +268,7 @@ def inverse_kinematics(
             fk_elbow_jacob_qi = fk_elbow_jacob[:, i]
 
             jac[i] = -np.dot(hand_term, fk_hand_jacob_qi) - elbow_weight * np.dot(elbow_term, fk_elbow_jacob_qi)
-        
+            
         return jac
     
 
