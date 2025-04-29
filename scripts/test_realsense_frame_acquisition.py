@@ -19,11 +19,11 @@ def main():
     parser.add_argument(
         "--delay",
         type=float,
-        default=0.1,
+        default=1,
         help="Artificial delay in seconds to simulate slow processing",
     )
     parser.add_argument(
-        "--frames", type=int, default=100, help="Number of frames to process"
+        "--frames", type=int, default=200, help="Number of frames to process"
     )
     parser.add_argument(
         "--display", action="store_true", help="Display frames in a window"
@@ -42,10 +42,10 @@ def main():
     # Get the device's frame rate
     device = profile.get_device()
     depth_sensor = device.first_depth_sensor()
-    frame_rate = depth_sensor.get_supported_modes()[0].fps
-    print(f"Camera frame rate: {frame_rate} FPS")
+    #frame_rate = depth_sensor.get_supported_modes()[0].fps
+    #print(f"Camera frame rate: {frame_rate} FPS")
     print(f"Simulated processing delay: {args.delay} seconds")
-    print(f"Expected frames dropped per cycle: {frame_rate * args.delay}")
+    #print(f"Expected frames dropped per cycle: {frame_rate * args.delay}")
 
     # Initialize frame counters and timers
     frame_count = 0
