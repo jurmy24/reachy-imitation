@@ -11,17 +11,22 @@ class MinimizeTimer:
         self.times = deque(maxlen=max_samples)
         self.total_time = 0
         self.calls = 0
+        self.iterations = deque(maxlen=max_samples)
+        self.total_iterations = 0
 
     def start(self):
         """Start timing a minimize call."""
         self.start_time = time.time()
 
-    def stop(self):
+    def stop(self, iterations=None):
         """Stop timing a minimize call and record the result."""
         elapsed = time.time() - self.start_time
         self.times.append(elapsed)
         self.total_time += elapsed
         self.calls += 1
+        if iterations is not None:
+            self.iterations.append(iterations)
+            self.total_iterations += iterations
 
     def get_stats(self):
         """Get statistics about the minimize function calls."""
@@ -32,6 +37,10 @@ class MinimizeTimer:
                 "max_time": 0,
                 "total_time": 0,
                 "calls": 0,
+                "avg_iterations": 0,
+                "min_iterations": 0,
+                "max_iterations": 0,
+                "total_iterations": 0,
             }
 
         return {
@@ -40,6 +49,10 @@ class MinimizeTimer:
             "max_time": max(self.times),
             "total_time": self.total_time,
             "calls": self.calls,
+            "avg_iterations": sum(self.iterations) / len(self.iterations) if self.iterations else 0,
+            "min_iterations": min(self.iterations) if self.iterations else 0,
+            "max_iterations": max(self.iterations) if self.iterations else 0,
+            "total_iterations": self.total_iterations,
         }
 
 
@@ -386,11 +399,13 @@ def inverse_kinematics_fixed_wrist(
         args=(ee_coords, elbow_coords, elbow_weight, who, length, side),
         method="SLSQP",
         bounds=joint_limits_fixed_wrist,
-        tol=1e-2,  # Higher tolerance
+        tol=1e-3,  # Higher tolerance
         options={"maxiter": 20},
     )
-    # Stop timing
-    minimize_timer.stop()
+    # Stop timing and record iterations
+    minimize_timer.stop(result.nit)
+
+    
 
     # Convert result from radians to degrees
     return np.rad2deg(result.x)
@@ -428,3 +443,8 @@ if __name__ == "__main__":
     print(f"Min time: {stats['min_time']*1000:.2f} ms")
     print(f"Max time: {stats['max_time']*1000:.2f} ms")
     print(f"Total time: {stats['total_time']*1000:.2f} ms")
+    print(f"\nIteration Statistics:")
+    print(f"Average iterations: {stats['avg_iterations']:.1f}")
+    print(f"Min iterations: {stats['min_iterations']}")
+    print(f"Max iterations: {stats['max_iterations']}")
+    print(f"Total iterations: {stats['total_iterations']}")

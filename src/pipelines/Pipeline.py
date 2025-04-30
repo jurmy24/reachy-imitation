@@ -104,3 +104,5 @@ class Pipeline(ABC):
                 self.reachy.turn_off_smoothly("r_arm")
                 self.reachy.turn_off_smoothly("l_arm")
                 self.reachy.turn_off_smoothly("head")
+        else:
+            print("What the fudge")

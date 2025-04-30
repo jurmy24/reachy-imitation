@@ -316,14 +316,14 @@ class Pipeline_custom_ik(Pipeline):
         position_alpha = 0.4  # For EMA position smoothing
         movement_interval = 0.0333  # Send commands at ~30Hz maximum
         max_change = 5.0  # maximum change in degrees per joint per update
-        elbow_weight = 0.1
+        elbow_weight = 0.5
         target_pos_tolerance = (
             0.03  # update current position if it is more than this far from the target
         )
         movement_min_tolerance = (
             0.005  # update current position if it has moved more than this
         )
-        torque_limit = 80.0  # as a percentage of maximum
+        torque_limit = 100.0  # as a percentage of maximum
         ########################################
 
         ############### FLAGS ##################
@@ -560,5 +560,10 @@ class Pipeline_custom_ik(Pipeline):
                 print(
                     f"Percentage of total loop time: {(minimize_stats['total_time'] / sum(timings['total_loop']) * 100):.1f}%"
                 )
+                print(f"\nIteration Statistics:")
+                print(f"Average iterations: {minimize_stats['avg_iterations']:.1f}")
+                print(f"Min iterations: {minimize_stats['min_iterations']}")
+                print(f"Max iterations: {minimize_stats['max_iterations']}")
+                print(f"Total iterations: {minimize_stats['total_iterations']}")
 
             self.cleanup()

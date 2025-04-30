@@ -27,6 +27,8 @@ def main():
     # Run the main pipeline
     print(f"Tracking {arm} arm(s)...")
     pipeline.shadow(side=arm, display=True)
+    # pipeline.cleanup()
+
 
     # Example on how to run:
     # python -m src.main

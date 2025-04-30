@@ -2,7 +2,7 @@ import numpy as np
 from typing import Tuple, Literal
 
 from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
-from src.models.custom_ik import inverse_kinematics, inverse_kinematics_fixed_wrist
+from src.models.custom_ik import inverse_kinematics_fixed_wrist
 
 
 class ShadowArm:
@@ -224,8 +224,8 @@ class ShadowArm:
         try:
             # Compute IK
             joint_pos = inverse_kinematics_fixed_wrist(
-                hand_position=target_ee_position,
-                elbow_position=target_elbow_position,
+                ee_coords=target_ee_position,
+                elbow_coords=target_elbow_position,
                 initial_guess=self.joint_array,
                 elbow_weight=elbow_weight,
                 who="reachy",
