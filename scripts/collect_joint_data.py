@@ -2,6 +2,7 @@
 
 import csv
 import time
+import os
 from datetime import datetime
 from threading import Thread
 from reachy_sdk import ReachySDK
@@ -19,9 +20,13 @@ def collect_joint_data(duration=3.0, sampling_rate=0.1):
         duration: Total duration of data collection in seconds
         sampling_rate: Time between samples in seconds
     """
+    # Create data directory if it doesn't exist
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    
     # Create CSV filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"joint_data_{timestamp}.csv"
+    filename = os.path.join(data_dir, f"joint_data_{timestamp}.csv")
 
     # Define the strong man pose
     strong_man_pose = {
@@ -53,7 +58,7 @@ def collect_joint_data(duration=3.0, sampling_rate=0.1):
         # Write header
         header = ["timestamp"]
         for arm in ["l_arm", "r_arm"]:
-            for joint in reachy.__getattribute__(arm).joints:
+            for joint in reachy.__getattribute__(arm).joints.values():
                 header.extend(
                     [
                         f"{arm}_{joint.name}_position",
@@ -74,7 +79,7 @@ def collect_joint_data(duration=3.0, sampling_rate=0.1):
                 current_time = time.time() - start_time
                 row = [current_time]
                 for arm in ["l_arm", "r_arm"]:
-                    for joint in reachy.__getattribute__(arm).joints:
+                    for joint in reachy.__getattribute__(arm).joints.values():
                         row.extend(
                             [
                                 joint.present_position,
