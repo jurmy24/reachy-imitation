@@ -177,6 +177,7 @@ def compute_transformation_matrices_and_jacobian(joint_angles, who, length, side
 
     T04 = Ts_g_0i[3]
     T08 = Ts_g_0i[-1]
+
     position_elbow = np.array(T04[0:3, 3], dtype=np.float64).flatten()
     position_hand = np.array(T08[0:3, 3], dtype=np.float64).flatten()
 
@@ -345,13 +346,14 @@ def jac_analytical_fixed_wrist(
     else:
         elbow_term = elbow_error / elbow_norm
 
-    for i in range(number_joints):
+    jac = -hand_term @ fk_ee_jacob - elbow_weight * elbow_term @ fk_elbow_jacob
+    '''for i in range(number_joints):
         fk_hand_jacob_qi = fk_ee_jacob[:, i]
         fk_elbow_jacob_qi = fk_elbow_jacob[:, i]
 
         jac[i] = -np.dot(hand_term, fk_hand_jacob_qi) - elbow_weight * np.dot(
             elbow_term, fk_elbow_jacob_qi
-        )
+        )'''
 
     return jac
 
@@ -404,8 +406,6 @@ def inverse_kinematics_fixed_wrist(
     )
     # Stop timing and record iterations
     minimize_timer.stop(result.nit)
-
-    
 
     # Convert result from radians to degrees
     return np.rad2deg(result.x)
