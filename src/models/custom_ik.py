@@ -91,11 +91,11 @@ def compute_transformation_matrices(joint_angles, who, length, side):
         d = [0, 0, 0, 0, 0, 0, 0, 0]
         Tbase0 = mattransfo(-pi / 2, 0, -pi / 2, 0)
     if who == "reachy" and side == "right":
-        d = [0, 0, 0, 0, 0, 0, -0.325, -0.01]
+        d = [0, 0, 0, 0, 0, 0, -0.0325, -0.01]
         Tbase0 = mattransfo(-pi / 2, 0, -pi / 2, -0.19)
 
     if who == "reachy" and side == "left":
-        d = [0, 0, 0, 0, 0, 0, -0.325, 0.01]
+        d = [0, 0, 0, 0, 0, 0, -0.0325, 0.01]
         Tbase0 = mattransfo(-pi / 2, 0, -pi / 2, 0.19)
 
     T01 = Tbase0 @ mattransfo(alpha[0], d[0], th[0], r[0])
@@ -134,6 +134,7 @@ def cost_function(
 ):
     """
     Compute the cost function that includes hand-effector and elbow position errors.
+    This calculates the sum of squared errors between the current and target positions. L2 norm.
     """
     # Compute the
     current_elbow_coords, current_ee_coords = forward_kinematics(

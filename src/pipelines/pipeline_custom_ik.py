@@ -312,9 +312,9 @@ class Pipeline_custom_ik(Pipeline):
             display: Whether to display the video window with tracking information
         """
         ############### Parameters ###############
-        smoothing_buffer_size = 5
+        smoothing_buffer_size = 5  # ! Not actually used rn i believe
         position_alpha = 0.4  # For EMA position smoothing
-        movement_interval = 0.0333  # Send commands at ~30Hz
+        movement_interval = 0.0333  # Send commands at ~30Hz maximum
         max_change = 5.0  # maximum change in degrees per joint per update
         elbow_weight = 0.1
         target_pos_tolerance = (
@@ -547,7 +547,7 @@ class Pipeline_custom_ik(Pipeline):
                     print(
                         f"Target update rate: {1/movement_interval:.1f} Hz (movement_interval={movement_interval}s)"
                     )
-            
+
             # Print minimize function timing statistics
             minimize_stats = minimize_timer.get_stats()
             if minimize_stats["calls"] > 0:
@@ -557,6 +557,8 @@ class Pipeline_custom_ik(Pipeline):
                 print(f"Min time: {minimize_stats['min_time']*1000:.2f} ms")
                 print(f"Max time: {minimize_stats['max_time']*1000:.2f} ms")
                 print(f"Total time: {minimize_stats['total_time']*1000:.2f} ms")
-                print(f"Percentage of total loop time: {(minimize_stats['total_time'] / sum(timings['total_loop']) * 100):.1f}%")
+                print(
+                    f"Percentage of total loop time: {(minimize_stats['total_time'] / sum(timings['total_loop']) * 100):.1f}%"
+                )
 
             self.cleanup()
