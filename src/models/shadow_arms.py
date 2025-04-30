@@ -222,13 +222,6 @@ class ShadowArm:
             bool: True if calculation was successful
         """
         try:
-            # Get the current transformation matrix
-            # transform_matrix = self.arm.forward_kinematics()
-
-            # ! The fact that we're leaving the orientation unchanged might give strange results
-            # Set the target position in the transformation matrix
-            # transform_matrix[:3, 3] = target_ee_position
-
             # Compute IK
             joint_pos = inverse_kinematics_fixed_wrist(
                 hand_position=target_ee_position,
