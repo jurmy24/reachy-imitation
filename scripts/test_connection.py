@@ -89,13 +89,38 @@ def zero_deux_bras() -> None:
         reachy.r_arm.r_wrist_pitch: 0,
         reachy.r_arm.r_wrist_roll: 0,
     }
-    #reachy.turn_on("l_arm")
-    #reachy.turn_on("r_arm")
+    reachy.turn_on("l_arm")
+    reachy.turn_on("r_arm")
     goto(
         goal_positions=zero_angled_position,
+        duration=3.0,
+        interpolation_mode=InterpolationMode.MINIMUM_JERK,
+                )
+    
+def test_strong_man():
+    strong_man_pose = {
+            reachy.l_arm.l_shoulder_pitch: 0,
+            reachy.l_arm.l_shoulder_roll: 90,
+            reachy.l_arm.l_arm_yaw: 90,
+            reachy.l_arm.l_elbow_pitch: -90,
+            reachy.l_arm.l_forearm_yaw: 0,
+            reachy.l_arm.l_wrist_pitch: 0,
+            reachy.l_arm.l_wrist_roll: 0,
+            reachy.r_arm.r_shoulder_pitch: 0,
+            reachy.r_arm.r_shoulder_roll: -90,
+            reachy.r_arm.r_arm_yaw: -90,
+            reachy.r_arm.r_elbow_pitch: -90,
+            reachy.r_arm.r_forearm_yaw: 0,
+            reachy.r_arm.r_wrist_pitch: 0,
+            reachy.r_arm.r_wrist_roll: 0,
+        }
+    reachy.turn_on("l_arm")
+    reachy.turn_on("r_arm")
+    goto(
+        goal_positions=strong_man_pose,
         duration=1.0,
         interpolation_mode=InterpolationMode.MINIMUM_JERK,
-    )
+                )
 
 
 if __name__ == "__main__":
@@ -105,9 +130,15 @@ if __name__ == "__main__":
     #time.sleep(0.5)
     #zero_deux_bras()
 
+    test_strong_man()
+    time.sleep(3)
+    zero_deux_bras()
+
+
+
     reachy.turn_off_smoothly("r_arm")
     reachy.turn_off_smoothly("l_arm")
-    reachy.turn_off_smoothly("head")
-    # reachy.turn_off_smoothly("reachy")
+    # reachy.turn_off_smoothly("head")
+    reachy.turn_off_smoothly("reachy")
 
 
