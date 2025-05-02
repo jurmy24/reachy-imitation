@@ -292,13 +292,13 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                             hand_closed = arm_to_process_hand.is_hand_closed(
                                 hand_landmarks
                             )
-                            if arm_to_process_hand.hand_closed != hand_closed:
-                                # update the hand state - using force
-                                arm_to_process_hand.hand_closed = hand_closed
-                                if hand_closed:
-                                    arm_to_process_hand.close_hand()
-                                else:
-                                    arm_to_process_hand.open_hand()
+                            # if arm_to_process_hand.hand_closed != hand_closed:
+                            #     # update the hand state - using force
+                            #     arm_to_process_hand.hand_closed = hand_closed
+                            if hand_closed:
+                                arm_to_process_hand.close_hand()
+                            else:
+                                arm_to_process_hand.open_hand()
                     current_arm.set_gripper_value(0.0)
 
                 # 6. Apply goal positions directly at controlled rate (maximum 30Hz)
