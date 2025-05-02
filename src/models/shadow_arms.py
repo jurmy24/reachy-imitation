@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Tuple, Literal
 
+from src.utils.hands import calculate_2D_distance
 from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
 from src.models.custom_ik import inverse_kinematics_fixed_wrist
 
@@ -260,3 +261,25 @@ class ShadowArm:
         except Exception as e:
             print(f"{self.side.capitalize()} arm IK calculation error: {e}")
             return False
+
+    def set_gripper_value(self, value: float):
+        """Set the gripper value in the joint dictionary"""
+        self.joint_dict[f"{self.prefix}gripper"] = value
+
+    def is_hand_closed(self, hand_landmarks, finger_tips):
+        palm_base = hand_landmarks.landmark[0]
+        open_fingers = 0
+        for tip in finger_tips:
+            if calculate_2D_distance(
+                hand_landmarks.landmark[tip], palm_base
+            ) > calculate_2D_distance(hand_landmarks.landmark[tip - 3], palm_base):
+                open_fingers += 1
+        return open_fingers <= 2
+
+    def close_hand(self):
+        value = 10 if self.side == "right" else -10
+        self.joint_dict[f"{self.prefix}gripper"] = value
+
+    def open_hand(self):
+        value = -60 if self.side == "right" else 60
+        self.joint_dict[f"{self.prefix}gripper"] = value

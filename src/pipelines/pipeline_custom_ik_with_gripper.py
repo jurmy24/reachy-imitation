@@ -6,6 +6,7 @@ from reachy_sdk.trajectory import goto
 from reachy_sdk.trajectory.interpolation import InterpolationMode
 from collections import defaultdict
 
+from src.utils.hands import flip_hand_labels
 from src.utils.three_d import get_reachy_coordinates
 from src.pipelines.Pipeline import Pipeline
 from src.mapping.get_arm_lengths import get_arm_lengths
@@ -33,8 +34,6 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
         self.hand_sf = None  # scale factor for shoulder to hand length ratio between robot and human (i.e. robot/human)
         self.elbow_sf = None  # scale factor for shoulder to elbow length ratio between robot and human (i.e. robot/human)
         self.zero_arm_position = get_zero_pos(self.reachy)
-        self.ordered_joint_names_right = get_ordered_joint_names(self.reachy, "right")
-        self.ordered_joint_names_left = get_ordered_joint_names(self.reachy, "left")
     """
 
     def display_frame(
@@ -110,6 +109,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
             0.005  # update current position if it has moved more than this
         )
         torque_limit = 100.0  # as a percentage of maximum
+        handedness_certainty_threshold = 0.7
         ########################################
 
         ############### FLAGS ##################
@@ -173,13 +173,15 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                     continue
                 color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
-                # 2. get pose landmarks from the image using mediapipe
+                # 2. get pose and hand landmarks from the image using mediapipe
                 pose_start = time.time()
                 pose_results = self.pose.process(rgb_image)
                 pose_end = time.time()
                 timings["pose_detection"].append(pose_end - pose_start)
 
                 landmarks = pose_results.pose_landmarks
+
+                hand_results = self.hands.process(rgb_image)
 
                 # Display tracking data if enabled
                 if display:
@@ -191,9 +193,8 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                 if not pose_results.pose_landmarks:
                     continue
 
-                # 3. process each arm
                 for current_arm in arms_to_process:
-                    # 3a. get coordinates of reachy's hands in reachy's frame
+                    # 3. get coordinates of reachy's hands in reachy's frame
                     coord_start = time.time()
                     shoulder, elbow, hand = current_arm.get_coordinates(
                         landmarks.landmark, depth_frame, w, h, self.intrinsics
@@ -215,7 +216,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                     conv_end = time.time()
                     timings["coordinate_conversion"].append(conv_end - conv_start)
 
-                    # 3b. Process the new ee_position and calculate IK if needed
+                    # 4. Process the new ee_position and calculate IK if needed
                     pos_proc_start = time.time()
                     should_update, target_ee_coord_smoothed = (
                         current_arm.process_new_position(
@@ -244,7 +245,63 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                         print("Inverse kinematics skipped!")
                         successful_update = False
 
-                # Apply goal positions directly at controlled rate (maximum 30Hz)
+                # 5. Set the gripper value in current_arm.joint_dict
+                if hand_results.multi_hand_landmarks:
+                    both_hand_landmarks = [None, None]  # left, right
+                    already_detected_handedness = None
+                    if hand_results.multi_hand_landmarks:
+                        for index, hand_landmarks in enumerate(
+                            hand_results.multi_hand_landmarks
+                        ):
+                            if (
+                                index >= 2
+                            ):  # only execute on the first two hands detected.
+                                break
+                            handedness_certainty = (
+                                hand_results.multi_handedness[index]
+                                .classification[0]
+                                .score
+                            )
+                            if handedness_certainty < handedness_certainty_threshold:
+                                continue
+
+                            # Could also add some visibility checks here
+
+                            hand_type = flip_hand_labels(
+                                hand_results.multi_handedness[index]
+                                .classification[0]
+                                .label
+                            )
+
+                            arm_to_process_hand = None
+                            for arm in arms_to_process:
+                                if arm.side == hand_type:
+                                    arm_to_process_hand = arm
+                                    break
+
+                            if (
+                                arm_to_process_hand is None
+                                or already_detected_handedness == hand_type
+                            ):
+                                continue
+
+                            already_detected_handedness = hand_type
+                            both_hand_landmarks[index] = hand_landmarks
+
+                            hand_landmarks = hand_results.multi_hand_landmarks[index]
+                            hand_closed = arm_to_process_hand.is_hand_closed(
+                                hand_landmarks
+                            )
+                            if arm_to_process_hand.hand_closed != hand_closed:
+                                # update the hand state - using force
+                                arm_to_process_hand.hand_closed = hand_closed
+                                if hand_closed:
+                                    arm_to_process_hand.close_hand()
+                                else:
+                                    arm_to_process_hand.open_hand()
+                    current_arm.set_gripper_value(0.0)
+
+                # 6. Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
                 if (
                     current_time - last_movement_time >= movement_interval
