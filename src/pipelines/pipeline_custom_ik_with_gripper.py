@@ -1,17 +1,23 @@
 import time
-from typing import Literal
+from typing import List, Literal
 import numpy as np
 import cv2
+from reachy_sdk.trajectory import goto
+from reachy_sdk.trajectory.interpolation import InterpolationMode
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 
 from src.utils.three_d import get_reachy_coordinates
 from src.pipelines.Pipeline import Pipeline
+from src.mapping.get_arm_lengths import get_arm_lengths
+from src.mapping.map_to_robot_coordinates import get_scale_factors
+from src.sensing.extract_3D_points import get_head_coordinates
+from config.CONSTANTS import get_zero_pos
 from src.reachy.utils import setup_torque_limits
 from src.models.shadow_arms import ShadowArm
+from src.models.custom_ik import minimize_timer  # Import the timer
 
 
-class Pipeline_custom_ik_threaded(Pipeline):
+class Pipeline_custom_ik_with_gripper(Pipeline):
     """Approach 1: Uses robot arm model with IK
 
     Inherits from Pipeline:
@@ -92,18 +98,18 @@ class Pipeline_custom_ik_threaded(Pipeline):
             display: Whether to display the video window with tracking information
         """
         ############### Parameters ###############
-        smoothing_buffer_size = 5
+        smoothing_buffer_size = 5  # ! Not actually used rn i believe
         position_alpha = 0.4  # For EMA position smoothing
-        movement_interval = 0.0333  # Send commands at ~30Hz
+        movement_interval = 0.0333  # Send commands at ~30Hz maximum
         max_change = 5.0  # maximum change in degrees per joint per update
-        elbow_weight = 0.1
+        elbow_weight = 0.5
         target_pos_tolerance = (
             0.03  # update current position if it is more than this far from the target
         )
         movement_min_tolerance = (
             0.005  # update current position if it has moved more than this
         )
-        torque_limit = 80.0  # as a percentage of maximum
+        torque_limit = 100.0  # as a percentage of maximum
         ########################################
 
         ############### FLAGS ##################
@@ -114,29 +120,16 @@ class Pipeline_custom_ik_threaded(Pipeline):
         # Performance metrics
         timings = defaultdict(list)
         update_count = 0
-
-        # Threading function for IK calculation
-        # NOTE: For threading!
-        def calculate_ik_threaded(
-            shadow_arm, target_ee_coord_smoothed, target_elbow_coord, elbow_weight
-        ):
-            try:
-                success = shadow_arm.calculate_joint_positions_custom_ik(
-                    target_ee_coord_smoothed, target_elbow_coord, elbow_weight
-                )
-                return shadow_arm.side, success
-            except Exception as e:
-                print(f"Error in IK thread for {shadow_arm.side} arm: {e}")
-                return shadow_arm.side, False
+        arm_count = 0  # Track number of arms for per-arm averages
 
         try:
             # Set torque limits for all motor joints for safety
             setup_torque_limits(self.reachy, torque_limit, side)
 
-            # Create a dictionary mapping arm sides to ShadowArm instances
-            shadow_arms = {}
+            # Initialize the arm(s) for shadowing
+            arms_to_process: List[ShadowArm] = []
             if side in ["right", "both"]:
-                shadow_arms["right"] = ShadowArm(
+                right_arm = ShadowArm(
                     self.reachy.r_arm,
                     "right",
                     smoothing_buffer_size,
@@ -144,8 +137,9 @@ class Pipeline_custom_ik_threaded(Pipeline):
                     max_change,
                     self.mp_pose,
                 )
+                arms_to_process.append(right_arm)
             if side in ["left", "both"]:
-                shadow_arms["left"] = ShadowArm(
+                left_arm = ShadowArm(
                     self.reachy.l_arm,
                     "left",
                     smoothing_buffer_size,
@@ -153,12 +147,9 @@ class Pipeline_custom_ik_threaded(Pipeline):
                     max_change,
                     self.mp_pose,
                 )
+                arms_to_process.append(left_arm)
 
-            arm_count = len(shadow_arms)
-
-            # Create thread pool - only needs max 2 threads (one per arm)
-            # This avoids creating/destroying threads in the loop
-            executor = ThreadPoolExecutor(max_workers=arm_count)
+            arm_count = len(arms_to_process)
 
             # For frame rate and movement control
             last_movement_time = time.time()
@@ -200,13 +191,11 @@ class Pipeline_custom_ik_threaded(Pipeline):
                 if not pose_results.pose_landmarks:
                     continue
 
-                # 3. process each arm and prepare for IK calculations
-                futures = []
-
-                for arm_side, shadow_arm in shadow_arms.items():
+                # 3. process each arm
+                for current_arm in arms_to_process:
                     # 3a. get coordinates of reachy's hands in reachy's frame
                     coord_start = time.time()
-                    shoulder, elbow, hand = shadow_arm.get_coordinates(
+                    shoulder, elbow, hand = current_arm.get_coordinates(
                         landmarks.landmark, depth_frame, w, h, self.intrinsics
                     )
                     coord_end = time.time()
@@ -217,19 +206,19 @@ class Pipeline_custom_ik_threaded(Pipeline):
 
                     conv_start = time.time()
                     target_ee_coord = get_reachy_coordinates(
-                        hand, shoulder, self.hand_sf, arm_side
+                        hand, shoulder, self.hand_sf, current_arm.side
                     )
 
                     target_elbow_coord = get_reachy_coordinates(
-                        elbow, shoulder, self.elbow_sf, arm_side
+                        elbow, shoulder, self.elbow_sf, current_arm.side
                     )
                     conv_end = time.time()
                     timings["coordinate_conversion"].append(conv_end - conv_start)
 
-                    # 3b. Process the new ee_position and determine if IK is needed
+                    # 3b. Process the new ee_position and calculate IK if needed
                     pos_proc_start = time.time()
                     should_update, target_ee_coord_smoothed = (
-                        shadow_arm.process_new_position(
+                        current_arm.process_new_position(
                             target_ee_coord,
                             target_pos_tolerance,
                             movement_min_tolerance,
@@ -238,36 +227,22 @@ class Pipeline_custom_ik_threaded(Pipeline):
                     pos_proc_end = time.time()
                     timings["position_processing"].append(pos_proc_end - pos_proc_start)
 
-                    # If we should update, submit task to thread pool
                     if should_update:
-                        future = executor.submit(
-                            calculate_ik_threaded,
-                            shadow_arm,
-                            target_ee_coord_smoothed,
-                            target_elbow_coord,
-                            elbow_weight,
+                        # ! We're not smoothing the elbow position here
+                        # Calculate IK and update joint positions
+                        ik_start = time.time()
+                        successful_update = (
+                            current_arm.calculate_joint_positions_custom_ik(
+                                target_ee_coord_smoothed,
+                                target_elbow_coord,
+                                elbow_weight,
+                            )
                         )
-                        futures.append(future)
-
-                # Process IK results from thread pool
-                ik_start = time.time()
-                successful_update = False
-
-                if futures:
-                    # Wait for all submitted tasks to complete
-                    successful_results = 0
-                    for future in futures:
-                        try:
-                            arm_side, success = future.result()
-                            if success:
-                                successful_results += 1
-                        except Exception as e:
-                            print(f"Error getting thread result: {e}")
-
-                    successful_update = successful_results > 0
-
-                ik_end = time.time()
-                timings["inverse_kinematics"].append(ik_end - ik_start)
+                        ik_end = time.time()
+                        timings["inverse_kinematics"].append(ik_end - ik_start)
+                    else:
+                        print("Inverse kinematics skipped!")
+                        successful_update = False
 
                 # Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
@@ -280,17 +255,17 @@ class Pipeline_custom_ik_threaded(Pipeline):
                     update_count += 1
 
                     # Apply joint positions for all arms that have updates
-                    for shadow_arm in shadow_arms.values():
+                    for current_arm in arms_to_process:
                         # Apply arm joint positions if there are any to apply
-                        if shadow_arm.joint_dict:
+                        if current_arm.joint_dict:
                             for (
                                 joint_name,
                                 joint_value,
-                            ) in shadow_arm.joint_dict.items():
+                            ) in current_arm.joint_dict.items():
                                 try:
                                     # Apply position directly to the joint
                                     setattr(
-                                        getattr(shadow_arm.arm, joint_name),
+                                        getattr(current_arm.arm, joint_name),
                                         "goal_position",
                                         joint_value,
                                     )
@@ -301,13 +276,14 @@ class Pipeline_custom_ik_threaded(Pipeline):
                     apply_end = time.time()
                     timings["apply_positions"].append(apply_end - apply_start)
 
+                # Calculate loop latency
+                loop_end_time = time.time()
+                loop_latency = loop_end_time - loop_start_time
+                timings["total_loop"].append(loop_latency)
+
         except Exception as e:
             print(f"Failed to run the shadow pipeline: {e}")
         finally:
-            # Shutdown thread pool gracefully
-            if "executor" in locals():
-                executor.shutdown(wait=False)
-
             # Print final detailed performance statistics
             print("\n===== PERFORMANCE ANALYSIS =====")
             print(f"Total updates: {update_count}")
@@ -357,5 +333,23 @@ class Pipeline_custom_ik_threaded(Pipeline):
                     print(
                         f"Target update rate: {1/movement_interval:.1f} Hz (movement_interval={movement_interval}s)"
                     )
+
+            # Print minimize function timing statistics
+            minimize_stats = minimize_timer.get_stats()
+            if minimize_stats["calls"] > 0:
+                print("\n===== MINIMIZE FUNCTION TIMING STATISTICS =====")
+                print(f"Total calls: {minimize_stats['calls']}")
+                print(f"Average time: {minimize_stats['avg_time']*1000:.2f} ms")
+                print(f"Min time: {minimize_stats['min_time']*1000:.2f} ms")
+                print(f"Max time: {minimize_stats['max_time']*1000:.2f} ms")
+                print(f"Total time: {minimize_stats['total_time']*1000:.2f} ms")
+                print(
+                    f"Percentage of total loop time: {(minimize_stats['total_time'] / sum(timings['total_loop']) * 100):.1f}%"
+                )
+                print(f"\nIteration Statistics:")
+                print(f"Average iterations: {minimize_stats['avg_iterations']:.1f}")
+                print(f"Min iterations: {minimize_stats['min_iterations']}")
+                print(f"Max iterations: {minimize_stats['max_iterations']}")
+                print(f"Total iterations: {minimize_stats['total_iterations']}")
 
             self.cleanup()
