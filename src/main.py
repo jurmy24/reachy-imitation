@@ -7,9 +7,9 @@ from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 reachy = ReachySDK(host="138.195.196.90")
 
 
-async def main():
+def main():
     calibrate = False
-    arm = "right"
+    arm = "left"
 
     pipeline = Pipeline_custom_ik(reachy)
     if calibrate:
@@ -26,13 +26,16 @@ async def main():
 
     # Run the main pipeline
     print(f"Tracking {arm} arm(s)...")
-    await pipeline.shadow(side=arm, display=True)
+    pipeline.shadow(side=arm, display=True)
+    # pipeline.cleanup()
+
 
     # Example on how to run:
     # python -m src.main
 
 
 if __name__ == "__main__":
-    import asyncio
+    # import asyncio
 
-    asyncio.run(main())
+    # asyncio.run(main())
+    main()

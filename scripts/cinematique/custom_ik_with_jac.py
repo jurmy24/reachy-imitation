@@ -1,63 +1,5 @@
 import numpy as np
 from scipy.optimize import minimize
-import time
-from collections import deque
-
-
-class MinimizeTimer:
-    """Class to track timing statistics for the minimize function."""
-
-    def __init__(self, max_samples=1000):
-        self.times = deque(maxlen=max_samples)
-        self.total_time = 0
-        self.calls = 0
-        self.iterations = deque(maxlen=max_samples)
-        self.total_iterations = 0
-
-    def start(self):
-        """Start timing a minimize call."""
-        self.start_time = time.time()
-
-    def stop(self, iterations=None):
-        """Stop timing a minimize call and record the result."""
-        elapsed = time.time() - self.start_time
-        self.times.append(elapsed)
-        self.total_time += elapsed
-        self.calls += 1
-        if iterations is not None:
-            self.iterations.append(iterations)
-            self.total_iterations += iterations
-
-    def get_stats(self):
-        """Get statistics about the minimize function calls."""
-        if not self.times:
-            return {
-                "avg_time": 0,
-                "min_time": 0,
-                "max_time": 0,
-                "total_time": 0,
-                "calls": 0,
-                "avg_iterations": 0,
-                "min_iterations": 0,
-                "max_iterations": 0,
-                "total_iterations": 0,
-            }
-
-        return {
-            "avg_time": sum(self.times) / len(self.times),
-            "min_time": min(self.times),
-            "max_time": max(self.times),
-            "total_time": self.total_time,
-            "calls": self.calls,
-            "avg_iterations": sum(self.iterations) / len(self.iterations) if self.iterations else 0,
-            "min_iterations": min(self.iterations) if self.iterations else 0,
-            "max_iterations": max(self.iterations) if self.iterations else 0,
-            "total_iterations": self.total_iterations,
-        }
-
-
-# Create a global timer instance
-minimize_timer = MinimizeTimer()
 
 
 def mattransfo(alpha, d, theta, r):
@@ -79,7 +21,7 @@ def mattransfo(alpha, d, theta, r):
 
 # who= "reachy" or "human"
 # correspond to reachy or human
-# length = lenght parameters
+# L = lenght parameters
 
 
 def compute_transformation_matrices(joint_angles, who, length, side):
@@ -97,6 +39,9 @@ def compute_transformation_matrices(joint_angles, who, length, side):
         joint_angles[4],
         joint_angles[5] - pi / 2,
         joint_angles[6] - pi / 2,
+        # 0,
+        # -pi / 2, - this is an alternative to setting joint limits on the wrist to fixed.
+        # -pi / 2,
         -pi / 2,
     ]
 
@@ -106,7 +51,6 @@ def compute_transformation_matrices(joint_angles, who, length, side):
     if who == "reachy" and side == "right":
         d = [0, 0, 0, 0, 0, 0, -0.0325, -0.01]
         Tbase0 = mattransfo(-pi / 2, 0, -pi / 2, -0.19)
-
     if who == "reachy" and side == "left":
         d = [0, 0, 0, 0, 0, 0, -0.0325, 0.01]
         Tbase0 = mattransfo(-pi / 2, 0, -pi / 2, 0.19)
@@ -177,8 +121,7 @@ def compute_transformation_matrices_and_jacobian(joint_angles, who, length, side
 
     T04 = Ts_g_0i[3]
     T08 = Ts_g_0i[-1]
-
-    position_elbow = np.array(T04[0:3, 3], dtype=np.float64).flatten()
+    position_e = np.array(T04[0:3, 3], dtype=np.float64).flatten()
     position_hand = np.array(T08[0:3, 3], dtype=np.float64).flatten()
 
     # Yeah what is the 8th column representing?
@@ -198,15 +141,15 @@ def compute_transformation_matrices_and_jacobian(joint_angles, who, length, side
         # jacobian[3:6, i] = 0                                 # Angular part is being NEGLECTED
         # elbow_jacobian[3:6, i] = 0
         if i < 4:  # successive joint params have no affect on the elbow position
-            elbow_jacobian[0:3, i] = np.cross(Roz_i, position_elbow - p_i)
+            elbow_jacobian[0:3, i] = np.cross(Roz_i, position_e - p_i)
         # else:
         #     elbow_jacobian[0:3, i] = 0
 
     return (
-        T04,
-        T08,
-        elbow_jacobian[:, :-1],
+        position_e,
+        position_hand,
         jacobian[:, :-1],
+        elbow_jacobian[:, :-1],
     )  # T04, T08, jacobian (ignoring angular twist), elbow_jacobian (ignoring angular twist)
 
     # T01 = Tbase0 @ mattransfo(alpha[0], d[0], th[0], r[0])
@@ -228,16 +171,104 @@ def compute_transformation_matrices_and_jacobian(joint_angles, who, length, side
     # return T04, T08
 
 
+# ! THIS IS THE OLD ONE
+def compute_transformation_matrices_and_jacobian_old(joint_angles, L):
+    """
+    Compute the transformation matrices for the robotic arm.
+    """
+    pi = np.pi
+    if L[0] == "reachy":
+        alpha = [0, -pi / 2, -pi / 2, -pi / 2, +pi / 2, -pi / 2, -pi / 2, -pi / 2]
+        d = [0, 0, 0, 0, 0, 0, -0.0325, -0.01]
+        r = np.array([0, 0, -L[1], 0, -L[2], 0, 0, -L[3]])
+        th = [
+            joint_angles[0],
+            joint_angles[1] - pi / 2,
+            joint_angles[2] - pi / 2,
+            joint_angles[3],
+            joint_angles[4],
+            joint_angles[5] - pi / 2,
+            joint_angles[6] - pi / 2,
+            # 0,
+            # -pi / 2, - this is an alternative to setting joint limits on the wrist to fixed.
+            # -pi / 2,
+            -pi / 2,
+        ]
+        Tbase0 = mattransfo(-pi / 2, 0, -pi / 2, -0.19)
+    if L[1] == "human":
+        alpha = [0, -pi / 2, -pi / 2, -pi / 2, +pi / 2, -pi / 2, -pi / 2, -pi / 2]
+        d = [0, 0, 0, 0, 0, 0, 0, 0]
+        r = np.array([0, 0, -L[1], 0, -L[2], 0, 0, -L[3]])
+        th = [
+            joint_angles[0],
+            joint_angles[1] - pi / 2,
+            joint_angles[2] - pi / 2,
+            joint_angles[3],
+            joint_angles[4],
+            joint_angles[5] - pi / 2,
+            joint_angles[6] - pi / 2,
+            -pi / 2,
+        ]
+
+        Tbase0 = mattransfo(-pi / 2, 0, -pi / 2, 0)
+
+    T01 = Tbase0 @ mattransfo(alpha[0], d[0], th[0], r[0])
+    Ts_gi_i1 = [T01]
+    for i in range(1, 8):
+        Ts_gi_i1.append(mattransfo(alpha[i], d[i], th[i], r[i]))
+
+    Ts_g_0i = []
+    T = np.eye(4, 4)
+    for i in range(8):
+        T = T @ Ts_gi_i1[i]
+        Ts_g_0i.append(T.copy())
+
+    T04 = Ts_g_0i[3]
+    T08 = Ts_g_0i[-1]
+    position_e = np.array(T04[0:3, 3], dtype=np.float64).flatten()
+    position_hand = np.array(T08[0:3, 3], dtype=np.float64).flatten()
+
+    jacobian = np.zeros(
+        (6, 8)
+    )  # 6 rows (3 linear + 3 angular).  technically this should be (6,7)
+    elbow_jacobian = np.zeros((6, 8))  # technically this should be (6,4)
+
+    for i in range(8):
+        g_0i = Ts_g_0i[i]  # Transform from base to joint i
+        R_0i = g_0i[:3, :3]
+        p_i = g_0i[:3, 3]  # Position of joint i in base frame
+        Roz_i = R_0i[:, 2]
+        jacobian[0:3, i] = np.cross(
+            Roz_i, position_hand - p_i
+        )  # Linear part - from lecture slides
+        # jacobian[3:6, i] = 0                                 # Angular part is being NEGLECTED
+        # elbow_jacobian[3:6, i] = 0
+        if i < 4:  # successive joint params have no affect on the elbow position
+            elbow_jacobian[0:3, i] = np.cross(Roz_i, position_e - p_i)
+        # else:
+        #     elbow_jacobian[0:3, i] = 0
+
+    return (
+        position_e,
+        position_hand,
+        jacobian[:, :-1],
+        elbow_jacobian[:, :-1],
+    )  # T04, T08, jacobian (ignoring angular twist), elbow_jacobian (ignoring angular twist)
+
+    # Question for Marin, I'm ignoring the last column of the jacbobian because this doesn't correspond to a motor joint.
+    # HOWEVER, does that mean my position_hand variable should change to be the translation of T07
+
+
 def forward_kinematics(
-    joint_angle, who="reachy", length=[0.28, 0.25, 0.075], side="right"
+    joint_angles, who="reachy", length=[0.28, 0.25, 0.075], side="right"
 ):
     """
     Calculate the hand-effector position using forward kinematics.
     """
-    T04, T08 = compute_transformation_matrices(joint_angle, who, length, side)
-    position_elbow = np.array(T04[0:3, 3], dtype=np.float64).flatten()
-    position_hand = np.array(T08[0:3, 3], dtype=np.float64).flatten()
-    return position_elbow, position_hand
+    T04, T08 = compute_transformation_matrices(joint_angles, who, length, side)
+    position_e = np.array(T04[0:3, 3], dtype=np.float64).flatten()
+    position = np.array(T08[0:3, 3], dtype=np.float64).flatten()
+    return position_e, position
 
 
 def forward_kinematics_with_jacobian(
@@ -245,25 +276,12 @@ def forward_kinematics_with_jacobian(
 ):
     """
     Calculate the hand-effector position using forward kinematics.
-
-    Args:
-        joint_angles: The joint angles of the robotic arm.
-        who: The type of robotic arm.
-        length: The length of the robotic arm.
-        side: The side of the robotic arm.
-
-    Returns:
-        T04: The transformation matrix of the elbow.
-        T08: The transformation matrix of the hand.
-        elbow_jacobian: The Jacobian matrix of the elbow.
-        jacobian: The Jacobian matrix for the hand.
     """
-    T04, T08, elbow_jacobian, jacobian = compute_transformation_matrices_and_jacobian(
-        joint_angles, who, length, side
+    position_e, position, jacobian, elbow_jacobian = (
+        compute_transformation_matrices_and_jacobian(joint_angles, who, length, side)
     )
-    position_elbow = np.array(T04[0:3, 3], dtype=np.float64).flatten()
-    position_hand = np.array(T08[0:3, 3], dtype=np.float64).flatten()
-    return position_elbow, position_hand, elbow_jacobian, jacobian
+
+    return position_e, position, jacobian, elbow_jacobian
 
 
 def cost_function(
@@ -285,9 +303,9 @@ def cost_function(
     return total_cost
 
 
-# ! This is actually the gradient of the cost function, not the jacobian
+# Finite difference jacobian of the cost function (gradient vector)
 def jac_fd(
-    joint_angles, hand_position, elbow_position, elbow_weight, who, length, side
+    joint_angles, target_ee_coords, target_elbow_coords, elbow_weight, who, length, side
 ):
     eps = 1e-3
     jac = np.zeros((len(joint_angles)))
@@ -297,8 +315,8 @@ def jac_fd(
         jac[i] = (
             cost_function(
                 joint_angles + Eps,
-                hand_position,
-                elbow_position,
+                target_ee_coords,
+                target_elbow_coords,
                 elbow_weight,
                 who,
                 length,
@@ -306,8 +324,8 @@ def jac_fd(
             )
             - cost_function(
                 joint_angles,
-                hand_position,
-                elbow_position,
+                target_ee_coords,
+                target_elbow_coords,
                 elbow_weight,
                 who,
                 length,
@@ -324,7 +342,7 @@ def jac_analytical_fixed_wrist(
 
     number_joints = len(joint_angles)
     jac = np.zeros(number_joints)
-    current_elbow_coords, current_ee_coords, fk_elbow_jacob, fk_ee_jacob = (
+    current_elbow_coords, current_ee_coords, fk_hand_jacob, fk_elbow_jacob = (
         forward_kinematics_with_jacobian(joint_angles, who, length, side)
     )
 
@@ -346,14 +364,13 @@ def jac_analytical_fixed_wrist(
     else:
         elbow_term = elbow_error / elbow_norm
 
-    jac = -hand_term @ fk_ee_jacob - elbow_weight * elbow_term @ fk_elbow_jacob
-    '''for i in range(number_joints):
-        fk_hand_jacob_qi = fk_ee_jacob[:, i]
+    for i in range(number_joints):
+        fk_hand_jacob_qi = fk_hand_jacob[:, i]
         fk_elbow_jacob_qi = fk_elbow_jacob[:, i]
 
         jac[i] = -np.dot(hand_term, fk_hand_jacob_qi) - elbow_weight * np.dot(
             elbow_term, fk_elbow_jacob_qi
-        )'''
+        )
 
     return jac
 
@@ -383,6 +400,32 @@ def inverse_kinematics_fixed_wrist(
         (0, 0),
         (0, 0),
     ]
+    result = minimize(
+        cost_function,
+        initial_guess_rad,  # Use radian value for optimization
+        jac=jac_analytical_fixed_wrist,
+        args=(ee_coords, elbow_coords, elbow_weight, who, length, side),
+        method="SLSQP",
+        bounds=joint_limits_fixed_wrist,
+        tol=1e-2,  # Higher tolerance
+        options={"maxiter": 20},
+    )
+
+    # Convert result from radians to degrees
+    return np.rad2deg(result.x)
+
+
+def inverse_kinematics_fixed_wrist(
+    hand_position,
+    elbow_position,
+    initial_guess,
+    elbow_weight=0.1,
+    L=["reachy", 0.28, 0.25, 0.075],
+):
+    """
+    Implement the inverse kinematics.
+    """
+    pi = np.pi
     # joint_limits = [
     #     (-1.0 * pi, 0.5 * pi),
     #     (-1.0 * pi, 10 / 180 * pi),
@@ -392,23 +435,27 @@ def inverse_kinematics_fixed_wrist(
     #     (-0.25 * pi, 0.25 * pi),
     #     (-0.25 * pi, 0.25 * pi),
     # ]
-    # Start timing
-    minimize_timer.start()
+
+    joint_limits_fixed_wrist = [
+        (-1.0 * pi, 0.5 * pi),
+        (-1.0 * pi, 10 / 180 * pi),
+        (-0.5 * pi, 0.5 * pi),
+        (-125 / 180 * pi, 0),
+        (0, 0),
+        (0, 0),
+        (0, 0),
+    ]
+
     result = minimize(
         cost_function,
-        initial_guess_rad,  # Use radian value for optimization
-        jac=jac_fd,
-        args=(ee_coords, elbow_coords, elbow_weight, who, length, side),
+        initial_guess,
+        jac=jac_analytical_fixed_wrist,
+        args=(hand_position, elbow_position, elbow_weight, L),
         method="SLSQP",
         bounds=joint_limits_fixed_wrist,
-        tol=1e-3,  # Higher tolerance
-        options={"maxiter": 20},
     )
-    # Stop timing and record iterations
-    minimize_timer.stop(result.nit)
 
-    # Convert result from radians to degrees
-    return np.rad2deg(result.x)
+    return result.x
 
 
 if __name__ == "__main__":
@@ -417,34 +464,21 @@ if __name__ == "__main__":
     hand_position = np.array([0.3, 0.2, 0.1])
 
     # Elbow position and weight
-    elbow_position = np.array([0.1, 0, -0.3])
-    elbow_weight = 0
+    elbow_position = np.array([0.1, 0.1, 0.1])
+    elbow_weight = 0.1
 
     # Initial guess for joint angles
     # you should use previous position if you have one
-    initial_guess = np.array([0.1, 0.3, 0.1, 0.1, 0, 0, 0])
+    initial_guess = np.array([0.1, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1])
 
     # If you use reachy or human
-    # length=[length between shoulder and elbow, length between elbow and wrist, length between wrist and center of the hand]
-    who = "reachy"
-    length = [0.28, 0.25, 0.075]
-    side = "right"
+    # L = ['who', lenght between shoulder and elbow, length between elbow and wrist, lenght between wrist and center of the hand]
+    L = ["reachy", 0.28, 0.25, 0.075]
 
-    # Run a test and print the timing statistics
-    result = inverse_kinematics_fixed_wrist(
-        hand_position, elbow_position, initial_guess, elbow_weight, who, length, side
+    joint_angles = inverse_kinematics_fixed_wrist(
+        hand_position, elbow_position, initial_guess, elbow_weight, L
     )
 
-    # Print timing statistics
-    stats = minimize_timer.get_stats()
-    print("\n===== MINIMIZE FUNCTION TIMING STATISTICS =====")
-    print(f"Total calls: {stats['calls']}")
-    print(f"Average time: {stats['avg_time']*1000:.2f} ms")
-    print(f"Min time: {stats['min_time']*1000:.2f} ms")
-    print(f"Max time: {stats['max_time']*1000:.2f} ms")
-    print(f"Total time: {stats['total_time']*1000:.2f} ms")
-    print(f"\nIteration Statistics:")
-    print(f"Average iterations: {stats['avg_iterations']:.1f}")
-    print(f"Min iterations: {stats['min_iterations']}")
-    print(f"Max iterations: {stats['max_iterations']}")
-    print(f"Total iterations: {stats['total_iterations']}")
+    print("Joint Angles:", joint_angles)
+    print("Elbow-Effector Position:", forward_kinematics(joint_angles, L)[0])
+    print("Hand-Effector Position:", forward_kinematics(joint_angles, L)[1])

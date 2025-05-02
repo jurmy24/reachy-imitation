@@ -14,4 +14,8 @@ dependencies = [
     "torchvision>=0.21.0",
     "torchinfo>=1.8.0",
     "pyyaml>=6.0.2",
+    "jupyter>=1.1.1",
+    "pandas>=2.2.3",
+    "seaborn>=0.13.2",
+    "matplotlib>=3.10.1",
 ]
