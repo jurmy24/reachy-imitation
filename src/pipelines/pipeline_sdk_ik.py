@@ -27,8 +27,6 @@ class Pipeline_one_mini(Pipeline):
         self.hand_sf = None  # scale factor for shoulder to hand length ratio between robot and human (i.e. robot/human)
         self.elbow_sf = None  # scale factor for shoulder to elbow length ratio between robot and human (i.e. robot/human)
         self.zero_arm_position = get_zero_pos(self.reachy)
-        self.ordered_joint_names_right = get_ordered_joint_names(self.reachy, "right")
-        self.ordered_joint_names_left = get_ordered_joint_names(self.reachy, "left")
     """
 
     def display_frame(

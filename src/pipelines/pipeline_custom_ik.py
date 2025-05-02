@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 from collections import defaultdict
 
+from src.reachy.utils import setup_torque_limits
 from src.utils.three_d import get_reachy_coordinates
 from src.pipelines.Pipeline import Pipeline
 from src.models.shadow_arms import ShadowArm
@@ -26,8 +27,6 @@ class Pipeline_custom_ik(Pipeline):
         self.hand_sf = None  # scale factor for shoulder to hand length ratio between robot and human (i.e. robot/human)
         self.elbow_sf = None  # scale factor for shoulder to elbow length ratio between robot and human (i.e. robot/human)
         self.zero_arm_position = get_zero_pos(self.reachy)
-        self.ordered_joint_names_right = get_ordered_joint_names(self.reachy, "right")
-        self.ordered_joint_names_left = get_ordered_joint_names(self.reachy, "left")
     """
 
     def display_frame(

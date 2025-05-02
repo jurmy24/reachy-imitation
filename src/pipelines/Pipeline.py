@@ -35,8 +35,6 @@ class Pipeline(ABC):
         # scale factor for shoulder to elbow length ratio between robot and human (i.e. robot/human)
         self.elbow_sf = None
         self.zero_arm_position = get_zero_pos(self.reachy)
-        self.ordered_joint_names_right = get_ordered_joint_names(self.reachy, "right")
-        self.ordered_joint_names_left = get_ordered_joint_names(self.reachy, "left")
 
         self.initialize()
 
