@@ -9,7 +9,7 @@ from reachy_sdk.trajectory.interpolation import InterpolationMode
 import numpy as np
 import time
 
-from config.CONSTANTS import get_ordered_joint_names, get_zero_pos
+from config.CONSTANTS import get_zero_pos
 from src.mapping.get_arm_lengths import get_arm_lengths
 from src.mapping.map_to_robot_coordinates import get_scale_factors
 from src.sensing.extract_3D_points import get_head_coordinates

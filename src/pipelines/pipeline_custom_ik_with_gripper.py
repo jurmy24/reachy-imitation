@@ -41,6 +41,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
         arm,
         color_image,
         pose_landmarks=None,
+        hand_results=None
     ):
         # Display landmarks on the image
         if pose_landmarks:
@@ -49,6 +50,12 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                 pose_landmarks,
                 self.mp_pose.POSE_CONNECTIONS,
             )
+        
+        if hand_results.multi_hand_landmarks:
+            for hand_landmarks in hand_results.multi_hand_landmarks:
+                # Draw hand landmarks and connections
+                self.mp_draw.draw_landmarks(
+                        color_image, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
 
         # Set window title based on which arm(s) is being tracked
         window_title = "RealSense "
@@ -109,7 +116,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
             0.005  # update current position if it has moved more than this
         )
         torque_limit = 100.0  # as a percentage of maximum
-        handedness_certainty_threshold = 0.7
+        handedness_certainty_threshold = 0.3
         ########################################
 
         ############### FLAGS ##################
@@ -186,7 +193,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                 # Display tracking data if enabled
                 if display:
                     display_start = time.time()
-                    self.display_frame(side, color_image, landmarks)
+                    self.display_frame(side, color_image, landmarks, hand_results)
                     display_end = time.time()
                     timings["display"].append(display_end - display_start)
 
@@ -228,33 +235,33 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                     pos_proc_end = time.time()
                     timings["position_processing"].append(pos_proc_end - pos_proc_start)
 
-                    if should_update:
-                        # ! We're not smoothing the elbow position here
-                        # Calculate IK and update joint positions
-                        ik_start = time.time()
-                        successful_update = (
-                            current_arm.calculate_joint_positions_custom_ik(
-                                target_ee_coord_smoothed,
-                                target_elbow_coord,
-                                elbow_weight,
-                            )
-                        )
-                        ik_end = time.time()
-                        timings["inverse_kinematics"].append(ik_end - ik_start)
-                    else:
-                        print("Inverse kinematics skipped!")
-                        successful_update = False
-
+                    # if should_update:
+                    #     # ! We're not smoothing the elbow position here
+                    #     # Calculate IK and update joint positions
+                    #     ik_start = time.time()
+                    #     successful_update = (
+                    #         current_arm.calculate_joint_positions_custom_ik(
+                    #             target_ee_coord_smoothed,
+                    #             target_elbow_coord,
+                    #             elbow_weight,
+                    #         )
+                    #     )
+                    #     ik_end = time.time()
+                    #     timings["inverse_kinematics"].append(ik_end - ik_start)
+                    # else:
+                    #     print("Inverse kinematics skipped!")
+                    #     successful_update = False
                 # 5. Set the gripper value in current_arm.joint_dict
                 if hand_results.multi_hand_landmarks:
-                    both_hand_landmarks = [None, None]  # left, right
+                    #both_hand_landmarks = [None, None]  # left, right
                     already_detected_handedness = None
+                    processed_hands = 0
                     if hand_results.multi_hand_landmarks:
                         for index, hand_landmarks in enumerate(
                             hand_results.multi_hand_landmarks
                         ):
                             if (
-                                index >= 2
+                                processed_hands >= 2
                             ):  # only execute on the first two hands detected.
                                 break
                             handedness_certainty = (
@@ -284,22 +291,26 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                                 or already_detected_handedness == hand_type
                             ):
                                 continue
-
+                            processed_hands += 1
                             already_detected_handedness = hand_type
-                            both_hand_landmarks[index] = hand_landmarks
+                            #both_hand_landmarks[index] = hand_landmarks
 
                             hand_landmarks = hand_results.multi_hand_landmarks[index]
                             hand_closed = arm_to_process_hand.is_hand_closed(
-                                hand_landmarks
+                                hand_landmarks, self.mp_hands
                             )
                             # if arm_to_process_hand.hand_closed != hand_closed:
                             #     # update the hand state - using force
                             #     arm_to_process_hand.hand_closed = hand_closed
+                            print("Hand closed:", hand_closed)
                             if hand_closed:
                                 arm_to_process_hand.close_hand()
+
                             else:
                                 arm_to_process_hand.open_hand()
-                    current_arm.set_gripper_value(0.0)
+                    #current_arm.set_gripper_value(0.0)
+                
+                successful_update = True # For testing purposes
 
                 # 6. Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
@@ -321,6 +332,11 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                             ) in current_arm.joint_dict.items():
                                 try:
                                     # Apply position directly to the joint
+                                    if joint_name == "l_gripper":
+                                        # Apply gripper position
+                                        print(
+                                            f"Setting gripper position for {current_arm.side} arm: {joint_value}")
+                                    
                                     setattr(
                                         getattr(current_arm.arm, joint_name),
                                         "goal_position",

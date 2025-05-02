@@ -4,7 +4,7 @@ from typing import Tuple, Literal
 from src.utils.hands import calculate_2D_distance
 from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
 from src.models.custom_ik import inverse_kinematics_fixed_wrist
-
+from config.CONSTANTS import get_finger_tips
 
 class ShadowArm:
     """Base class for robot arm operations and tracking"""
@@ -266,10 +266,10 @@ class ShadowArm:
         """Set the gripper value in the joint dictionary"""
         self.joint_dict[f"{self.prefix}gripper"] = value
 
-    def is_hand_closed(self, hand_landmarks, finger_tips):
+    def is_hand_closed(self, hand_landmarks, mp_hands):
         palm_base = hand_landmarks.landmark[0]
         open_fingers = 0
-        for tip in finger_tips:
+        for tip in get_finger_tips(mp_hands):
             if calculate_2D_distance(
                 hand_landmarks.landmark[tip], palm_base
             ) > calculate_2D_distance(hand_landmarks.landmark[tip - 3], palm_base):
