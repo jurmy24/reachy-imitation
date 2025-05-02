@@ -87,7 +87,7 @@ def compute_transformation_matrices(joint_angles, who, length, side):
     Compute the transformation matrices for the robotic arm.
     """
     pi = np.pi
-    alpha = [0, -pi / 2, -pi / 2, -pi / 2, +pi / 2, -pi / 2, -pi / 2, -pi / 2]
+    alpha = [0, -pi / 2, -pi / 2, -pi / 2, pi / 2, -pi / 2, -pi / 2, -pi / 2]
     r = np.array([0, 0, -length[0], 0, -length[1], 0, 0, -length[2]])
     th = [
         joint_angles[0],
@@ -374,15 +374,26 @@ def inverse_kinematics_fixed_wrist(
     pi = np.pi
     # Convert initial guess from degrees to radians
     initial_guess_rad = np.deg2rad(initial_guess)
-    joint_limits_fixed_wrist = [
-        (-1.0 * pi, 0.5 * pi),
-        (-1.0 * pi, 10 / 180 * pi),
-        (-0.5 * pi, 0.5 * pi),
-        (-125 / 180 * pi, 0),
-        (0, 0),
-        (0, 0),
-        (0, 0),
-    ]
+    if side == "right":
+        joint_limits_fixed_wrist = [
+            (-1.0 * pi, 0.5 * pi),
+            (-1.0 * pi, 10 / 180 * pi),
+            (-0.5 * pi, 0.5 * pi),
+            (-125 / 180 * pi, 0),
+            (0, 0),
+            (0, 0),
+            (0, 0),
+        ]
+    elif side == "left":
+        joint_limits_fixed_wrist = [
+            (-1.0 * pi, 0.5 * pi),
+            (-10 / 180 * pi,  1.0 * pi),
+            (-0.5 * pi, 0.5 * pi),
+            (-125 / 180 * pi, 0),
+            (0, 0),
+            (0, 0),
+            (0, 0),
+        ]
     # joint_limits = [
     #     (-1.0 * pi, 0.5 * pi),
     #     (-1.0 * pi, 10 / 180 * pi),

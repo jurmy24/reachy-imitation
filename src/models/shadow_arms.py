@@ -126,9 +126,9 @@ class ShadowArm:
         # TODO: this is currently replacing a Kalman filter
         # Apply position smoothing
         # ! We're never actually using the position history
-        self.position_history.append(target_ee_coord)
-        if len(self.position_history) > self.smoothing_buffer_size:
-            self.position_history.pop(0)
+        # self.position_history.append(target_ee_coord)
+        # if len(self.position_history) > self.smoothing_buffer_size:
+        #     self.position_history.pop(0)
 
         # Compute EMA for smoother position
         smoothed_position = (
@@ -156,7 +156,7 @@ class ShadowArm:
             self.prev_hand_pos = smoothed_position
 
         # ! We're always updating now and never skipping
-        return True, smoothed_position
+        return should_update_position, smoothed_position
 
     def calculate_joint_positions(self, target_position: np.ndarray) -> bool:
         """Calculate new joint positions using inverse kinematics
@@ -201,7 +201,7 @@ class ShadowArm:
                 self.joint_dict[name] = self.joint_array[i]
 
             # Handle gripper separately - maintain closed
-            self.joint_dict[f"{self.prefix}gripper"] = 0
+            # self.joint_dict[f"{self.prefix}gripper"] = 0
 
             return True
         except Exception as e:
@@ -257,16 +257,12 @@ class ShadowArm:
                 self.joint_dict[name] = self.joint_array[i]
 
             # Handle gripper separately - maintain closed
-            self.joint_dict[f"{self.prefix}gripper"] = 0
+            #self.joint_dict[f"{self.prefix}gripper"] = 0
 
             return True
         except Exception as e:
             print(f"{self.side.capitalize()} arm IK calculation error: {e}")
             return False
-
-    def set_gripper_value(self, value: float):
-        """Set the gripper value in the joint dictionary"""
-        self.joint_dict[f"{self.prefix}gripper"] = value
 
     def is_hand_closed(self, hand_landmarks, mp_hands):
         palm_base = hand_landmarks.landmark[0]

@@ -117,6 +117,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
         ############### FLAGS ##################
         cleanup_requested = False
         successful_update = False
+        successful_gripper_update = False
         ########################################
 
         # Performance metrics
@@ -244,9 +245,10 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                         ik_end = time.time()
                         timings["inverse_kinematics"].append(ik_end - ik_start)
                     else:
-                        print("Inverse kinematics skipped!")
+                        # print("Inverse kinematics skipped!")
                         successful_update = False
 
+                hand_data_start = time.time()
                 # 5. Set the gripper value in current_arm.joint_dict
                 if hand_results.multi_hand_landmarks:
                     # both_hand_landmarks = [None, None]  # left, right
@@ -296,12 +298,19 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                             )
                             if arm_to_process_hand.hand_closed != hand_closed:
                                 # update the hand state - using force
-                                successful_update = True
+                                successful_gripper_update = True
                                 arm_to_process_hand.hand_closed = hand_closed
                                 if hand_closed:
                                     arm_to_process_hand.close_hand()
                                 else:
                                     arm_to_process_hand.open_hand()
+                            else:
+                                successful_gripper_update = False
+
+                hand_data_end = time.time()
+                timings["hand_data_processing"].append(
+                    hand_data_end - hand_data_start
+                )
 
                 # 6. Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
@@ -310,29 +319,61 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                     and successful_update
                 ):
                     apply_start = time.time()
-                    last_movement_time = current_time
-                    update_count += 1
-
                     # Apply joint positions for all arms that have updates
                     for current_arm in arms_to_process:
                         # Apply arm joint positions if there are any to apply
                         if current_arm.joint_dict:
                             for (
-                                joint_name,
-                                joint_value,
+                                key,
+                                value,
                             ) in current_arm.joint_dict.items():
+                                if key == f"{current_arm.prefix}gripper":
+                                    continue
                                 try:
                                     setattr(
-                                        getattr(current_arm.arm, joint_name),
+                                        getattr(current_arm.arm, key),
                                         "goal_position",
-                                        joint_value,
+                                        value,
                                     )
                                 except Exception as e:
                                     print(
-                                        f"Error setting position for {joint_name}: {e}"
+                                        f"Error setting position for {key}: {e}"
                                     )
                     apply_end = time.time()
                     timings["apply_positions"].append(apply_end - apply_start)
+
+                
+                # # Gripper Set Position
+                if (
+                    current_time - last_movement_time >= movement_interval
+                    and successful_gripper_update
+                ):
+                    # Apply joint positions for all arms that have updates
+                    for current_arm in arms_to_process:
+                        
+                        # Apply arm joint positions if there are any to apply
+                        if current_arm.joint_dict:
+                            
+                            joint = f"{current_arm.prefix}gripper"
+                            if joint in current_arm.joint_dict:
+                                try:
+                                    print(f"Setting gripper position for {joint}: {current_arm.joint_dict[joint]}")
+                                    setattr(
+                                        getattr(current_arm.arm, joint),
+                                        "goal_position",
+                                        current_arm.joint_dict[joint],
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Error setting position for {joint}: {e}"
+                                    )
+                            else:
+                                print(f"Gripper joint {joint} not found in joint_dict")
+                
+
+                if successful_update or successful_gripper_update:
+                    update_count += 1
+                    last_movement_time = time.time()
 
                 # Calculate loop latency
                 loop_end_time = time.time()
