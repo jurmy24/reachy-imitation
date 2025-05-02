@@ -57,6 +57,7 @@ def get_zero_pos(reachy, arm="both"):
 
     return zero_pos
 
+
 def get_finger_tips(mp_hands):
     """Get the finger tip landmarks from the MediaPipe hands module."""
     return [

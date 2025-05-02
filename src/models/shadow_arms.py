@@ -6,6 +6,7 @@ from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
 from src.models.custom_ik import inverse_kinematics_fixed_wrist
 from config.CONSTANTS import get_finger_tips
 
+
 class ShadowArm:
     """Base class for robot arm operations and tracking"""
 
@@ -32,6 +33,7 @@ class ShadowArm:
         self.position_alpha = position_alpha  # For EMA position smoothing
         self.max_change = max_change  # maximum change in degrees per joint per update
         self.prev_hand_pos = self.arm.forward_kinematics()[:3, 3]
+        self.hand_closed = False
 
     def get_landmark_indices(self):
         """Return MediaPipe landmark indices for this arm
