@@ -117,7 +117,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
         ############### FLAGS ##################
         cleanup_requested = False
         successful_update = False
-        successful_gripper_update = False
+        #successful_gripper_update = False
         ########################################
 
         # Performance metrics
@@ -156,6 +156,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
 
             # For frame rate and movement control
             last_movement_time = time.time()
+            last_hand_movement_time = time.time()
 
             print("Starting shadowing. Press 'q' to exit safely.")
 
@@ -250,6 +251,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
 
                 hand_data_start = time.time()
                 # 5. Set the gripper value in current_arm.joint_dict
+                successful_gripper_update = False
                 if hand_results.multi_hand_landmarks:
                     # both_hand_landmarks = [None, None]  # left, right
                     already_detected_handedness = None
@@ -304,8 +306,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                                     arm_to_process_hand.close_hand()
                                 else:
                                     arm_to_process_hand.open_hand()
-                            else:
-                                successful_gripper_update = False
+
 
                 hand_data_end = time.time()
                 timings["hand_data_processing"].append(
@@ -318,6 +319,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                     current_time - last_movement_time >= movement_interval
                     and successful_update
                 ):
+                    last_movement_time = current_time
                     apply_start = time.time()
                     # Apply joint positions for all arms that have updates
                     for current_arm in arms_to_process:
@@ -345,9 +347,10 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                 
                 # # Gripper Set Position
                 if (
-                    current_time - last_movement_time >= movement_interval
+                    current_time - last_hand_movement_time >= movement_interval
                     and successful_gripper_update
                 ):
+                    last_hand_movement_time = current_time
                     # Apply joint positions for all arms that have updates
                     for current_arm in arms_to_process:
                         
@@ -373,7 +376,6 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
 
                 if successful_update or successful_gripper_update:
                     update_count += 1
-                    last_movement_time = time.time()
 
                 # Calculate loop latency
                 loop_end_time = time.time()
