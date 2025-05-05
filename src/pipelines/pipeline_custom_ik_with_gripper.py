@@ -2,16 +2,23 @@ import time
 from typing import List, Literal
 import numpy as np
 import cv2
+from reachy_sdk.trajectory import goto
+from reachy_sdk.trajectory.interpolation import InterpolationMode
 from collections import defaultdict
 
-from src.reachy.utils import setup_torque_limits
+from src.utils.hands import flip_hand_labels
 from src.utils.three_d import get_reachy_coordinates
 from src.pipelines.Pipeline import Pipeline
+from src.mapping.get_arm_lengths import get_arm_lengths
+from src.mapping.map_to_robot_coordinates import get_scale_factors
+from src.sensing.extract_3D_points import get_head_coordinates
+from config.CONSTANTS import get_zero_pos
+from src.reachy.utils import setup_torque_limits
 from src.models.shadow_arms import ShadowArm
 from src.models.custom_ik import minimize_timer  # Import the timer
 
 
-class Pipeline_custom_ik(Pipeline):
+class Pipeline_custom_ik_with_gripper(Pipeline):
     """Approach 1: Uses robot arm model with IK
 
     Inherits from Pipeline:
@@ -29,12 +36,7 @@ class Pipeline_custom_ik(Pipeline):
         self.zero_arm_position = get_zero_pos(self.reachy)
     """
 
-    def display_frame(
-        self,
-        arm,
-        color_image,
-        pose_landmarks=None,
-    ):
+    def display_frame(self, arm, color_image, pose_landmarks=None, hand_results=None):
         # Display landmarks on the image
         if pose_landmarks:
             self.mp_draw.draw_landmarks(
@@ -42,6 +44,13 @@ class Pipeline_custom_ik(Pipeline):
                 pose_landmarks,
                 self.mp_pose.POSE_CONNECTIONS,
             )
+
+        if hand_results.multi_hand_landmarks:
+            for hand_landmarks in hand_results.multi_hand_landmarks:
+                # Draw hand landmarks and connections
+                self.mp_draw.draw_landmarks(
+                    color_image, hand_landmarks, self.mp_hands.HAND_CONNECTIONS
+                )
 
         # Set window title based on which arm(s) is being tracked
         window_title = "RealSense "
@@ -102,11 +111,13 @@ class Pipeline_custom_ik(Pipeline):
             0.005  # update current position if it has moved more than this
         )
         torque_limit = 100.0  # as a percentage of maximum
+        handedness_certainty_threshold = 0.3
         ########################################
 
         ############### FLAGS ##################
         cleanup_requested = False
         successful_update = False
+        #successful_gripper_update = False
         ########################################
 
         # Performance metrics
@@ -145,6 +156,7 @@ class Pipeline_custom_ik(Pipeline):
 
             # For frame rate and movement control
             last_movement_time = time.time()
+            last_hand_movement_time = time.time()
 
             print("Starting shadowing. Press 'q' to exit safely.")
 
@@ -165,7 +177,7 @@ class Pipeline_custom_ik(Pipeline):
                     continue
                 color_frame, depth_frame, color_image, rgb_image, h, w = camera_data
 
-                # 2. get pose landmarks from the image using mediapipe
+                # 2. get pose and hand landmarks from the image using mediapipe
                 pose_start = time.time()
                 pose_results = self.pose.process(rgb_image)
                 pose_end = time.time()
@@ -173,19 +185,20 @@ class Pipeline_custom_ik(Pipeline):
 
                 landmarks = pose_results.pose_landmarks
 
+                hand_results = self.hands.process(rgb_image)
+
                 # Display tracking data if enabled
                 if display:
                     display_start = time.time()
-                    self.display_frame(side, color_image, landmarks)
+                    self.display_frame(side, color_image, landmarks, hand_results)
                     display_end = time.time()
                     timings["display"].append(display_end - display_start)
 
                 if not pose_results.pose_landmarks:
                     continue
 
-                # 3. process each arm
                 for current_arm in arms_to_process:
-                    # 3a. get coordinates of reachy's hands in reachy's frame
+                    # 3. get coordinates of reachy's hands in reachy's frame
                     coord_start = time.time()
                     shoulder, elbow, hand = current_arm.get_coordinates(
                         landmarks.landmark, depth_frame, w, h, self.intrinsics
@@ -207,7 +220,7 @@ class Pipeline_custom_ik(Pipeline):
                     conv_end = time.time()
                     timings["coordinate_conversion"].append(conv_end - conv_start)
 
-                    # 3b. Process the new ee_position and calculate IK if needed
+                    # 4. Process the new ee_position and calculate IK if needed
                     pos_proc_start = time.time()
                     should_update, target_ee_coord_smoothed = (
                         current_arm.process_new_position(
@@ -233,40 +246,136 @@ class Pipeline_custom_ik(Pipeline):
                         ik_end = time.time()
                         timings["inverse_kinematics"].append(ik_end - ik_start)
                     else:
-                        print("Inverse kinematics skipped!")
+                        # print("Inverse kinematics skipped!")
                         successful_update = False
 
-                # Apply goal positions directly at controlled rate (maximum 30Hz)
+                hand_data_start = time.time()
+                # 5. Set the gripper value in current_arm.joint_dict
+                successful_gripper_update = False
+                if hand_results.multi_hand_landmarks:
+                    # both_hand_landmarks = [None, None]  # left, right
+                    already_detected_handedness = None
+                    processed_hands = 0
+                    if hand_results.multi_hand_landmarks:
+                        for index, hand_landmarks in enumerate(
+                            hand_results.multi_hand_landmarks
+                        ):
+                            if (
+                                processed_hands >= 2
+                            ):  # only execute on the first two hands detected.
+                                break
+                            handedness_certainty = (
+                                hand_results.multi_handedness[index]
+                                .classification[0]
+                                .score
+                            )
+                            if handedness_certainty < handedness_certainty_threshold:
+                                continue
+
+                            # Could also add some visibility checks here
+
+                            hand_type = flip_hand_labels(
+                                hand_results.multi_handedness[index]
+                                .classification[0]
+                                .label
+                            )
+
+                            arm_to_process_hand = None
+                            for arm in arms_to_process:
+                                if arm.side == hand_type:
+                                    arm_to_process_hand = arm
+                                    break
+
+                            if (
+                                arm_to_process_hand is None
+                                or already_detected_handedness == hand_type
+                            ):
+                                continue
+                            processed_hands += 1
+                            already_detected_handedness = hand_type
+                            # both_hand_landmarks[index] = hand_landmarks
+                            hand_landmarks = hand_results.multi_hand_landmarks[index]
+                            hand_closed = arm_to_process_hand.is_hand_closed(
+                                hand_landmarks, self.mp_hands
+                            )
+                            if arm_to_process_hand.hand_closed != hand_closed:
+                                # update the hand state - using force
+                                successful_gripper_update = True
+                                arm_to_process_hand.hand_closed = hand_closed
+                                if hand_closed:
+                                    arm_to_process_hand.close_hand()
+                                else:
+                                    arm_to_process_hand.open_hand()
+
+
+                hand_data_end = time.time()
+                timings["hand_data_processing"].append(
+                    hand_data_end - hand_data_start
+                )
+
+                # 6. Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
                 if (
                     current_time - last_movement_time >= movement_interval
                     and successful_update
                 ):
-                    apply_start = time.time()
                     last_movement_time = current_time
-                    update_count += 1
-
+                    apply_start = time.time()
                     # Apply joint positions for all arms that have updates
                     for current_arm in arms_to_process:
                         # Apply arm joint positions if there are any to apply
                         if current_arm.joint_dict:
                             for (
-                                joint_name,
-                                joint_value,
+                                key,
+                                value,
                             ) in current_arm.joint_dict.items():
+                                if key == f"{current_arm.prefix}gripper":
+                                    continue
                                 try:
-                                    # Apply position directly to the joint
                                     setattr(
-                                        getattr(current_arm.arm, joint_name),
+                                        getattr(current_arm.arm, key),
                                         "goal_position",
-                                        joint_value,
+                                        value,
                                     )
                                 except Exception as e:
                                     print(
-                                        f"Error setting position for {joint_name}: {e}"
+                                        f"Error setting position for {key}: {e}"
                                     )
                     apply_end = time.time()
                     timings["apply_positions"].append(apply_end - apply_start)
+
+                
+                # # Gripper Set Position
+                if (
+                    current_time - last_hand_movement_time >= movement_interval
+                    and successful_gripper_update
+                ):
+                    last_hand_movement_time = current_time
+                    # Apply joint positions for all arms that have updates
+                    for current_arm in arms_to_process:
+                        
+                        # Apply arm joint positions if there are any to apply
+                        if current_arm.joint_dict:
+                            
+                            joint = f"{current_arm.prefix}gripper"
+                            if joint in current_arm.joint_dict:
+                                try:
+                                    print(f"Setting gripper position for {joint}: {current_arm.joint_dict[joint]}")
+                                    setattr(
+                                        getattr(current_arm.arm, joint),
+                                        "goal_position",
+                                        current_arm.joint_dict[joint],
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Error setting position for {joint}: {e}"
+                                    )
+                            else:
+                                print(f"Gripper joint {joint} not found in joint_dict")
+                
+
+                if successful_update or successful_gripper_update:
+                    update_count += 1
 
                 # Calculate loop latency
                 loop_end_time = time.time()

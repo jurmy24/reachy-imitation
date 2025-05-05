@@ -1,8 +1,10 @@
 import numpy as np
 from typing import Tuple, Literal
 
+from src.utils.hands import calculate_2D_distance
 from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
 from src.models.custom_ik import inverse_kinematics_fixed_wrist
+from config.CONSTANTS import get_finger_tips
 
 
 class ShadowArm:
@@ -31,6 +33,7 @@ class ShadowArm:
         self.position_alpha = position_alpha  # For EMA position smoothing
         self.max_change = max_change  # maximum change in degrees per joint per update
         self.prev_hand_pos = self.arm.forward_kinematics()[:3, 3]
+        self.hand_closed = False
 
     def get_landmark_indices(self):
         """Return MediaPipe landmark indices for this arm
@@ -123,9 +126,9 @@ class ShadowArm:
         # TODO: this is currently replacing a Kalman filter
         # Apply position smoothing
         # ! We're never actually using the position history
-        self.position_history.append(target_ee_coord)
-        if len(self.position_history) > self.smoothing_buffer_size:
-            self.position_history.pop(0)
+        # self.position_history.append(target_ee_coord)
+        # if len(self.position_history) > self.smoothing_buffer_size:
+        #     self.position_history.pop(0)
 
         # Compute EMA for smoother position
         smoothed_position = (
@@ -153,7 +156,7 @@ class ShadowArm:
             self.prev_hand_pos = smoothed_position
 
         # ! We're always updating now and never skipping
-        return True, smoothed_position
+        return should_update_position, smoothed_position
 
     def calculate_joint_positions(self, target_position: np.ndarray) -> bool:
         """Calculate new joint positions using inverse kinematics
@@ -198,7 +201,7 @@ class ShadowArm:
                 self.joint_dict[name] = self.joint_array[i]
 
             # Handle gripper separately - maintain closed
-            self.joint_dict[f"{self.prefix}gripper"] = 0
+            # self.joint_dict[f"{self.prefix}gripper"] = 0
 
             return True
         except Exception as e:
@@ -254,9 +257,27 @@ class ShadowArm:
                 self.joint_dict[name] = self.joint_array[i]
 
             # Handle gripper separately - maintain closed
-            self.joint_dict[f"{self.prefix}gripper"] = 0
+            #self.joint_dict[f"{self.prefix}gripper"] = 0
 
             return True
         except Exception as e:
             print(f"{self.side.capitalize()} arm IK calculation error: {e}")
             return False
+
+    def is_hand_closed(self, hand_landmarks, mp_hands):
+        palm_base = hand_landmarks.landmark[0]
+        open_fingers = 0
+        for tip in get_finger_tips(mp_hands):
+            if calculate_2D_distance(
+                hand_landmarks.landmark[tip], palm_base
+            ) > calculate_2D_distance(hand_landmarks.landmark[tip - 3], palm_base):
+                open_fingers += 1
+        return open_fingers <= 2
+
+    def close_hand(self):
+        value = 10 if self.side == "right" else -10
+        self.joint_dict[f"{self.prefix}gripper"] = value
+
+    def open_hand(self):
+        value = -60 if self.side == "right" else 60
+        self.joint_dict[f"{self.prefix}gripper"] = value

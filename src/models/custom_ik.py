@@ -87,7 +87,7 @@ def compute_transformation_matrices(joint_angles, who, length, side):
     Compute the transformation matrices for the robotic arm.
     """
     pi = np.pi
-    alpha = [0, -pi / 2, -pi / 2, -pi / 2, +pi / 2, -pi / 2, -pi / 2, -pi / 2]
+    alpha = [0, -pi / 2, -pi / 2, -pi / 2, pi / 2, -pi / 2, -pi / 2, -pi / 2]
     r = np.array([0, 0, -length[0], 0, -length[1], 0, 0, -length[2]])
     th = [
         joint_angles[0],
@@ -132,9 +132,9 @@ def compute_transformation_matrices(joint_angles, who, length, side):
 
 # ! THIS IS THE NEW ONE
 # NOTE: We should return the transformation matrices, not the position
-def compute_transformation_matrices_and_jacobian(joint_angles, who, length, side):
+def fixed_wrist_forward_kinematics_with_jacobian(joint_angles, who, length, side):
     """
-    Compute the transformation matrices for the robotic arm.
+    Compute the transformation matrices and jacobians for the robotic arm.
     """
     pi = np.pi
     alpha = [0, -pi / 2, -pi / 2, -pi / 2, +pi / 2, -pi / 2, -pi / 2, -pi / 2]
@@ -181,10 +181,7 @@ def compute_transformation_matrices_and_jacobian(joint_angles, who, length, side
     position_elbow = np.array(T04[0:3, 3], dtype=np.float64).flatten()
     position_hand = np.array(T08[0:3, 3], dtype=np.float64).flatten()
 
-    # Yeah what is the 8th column representing?
-    jacobian = np.zeros(
-        (6, 8)
-    )  # 6 rows (3 linear + 3 angular).  technically this should be (6,7)
+    jacobian = np.zeros((6, 8))  # 6 rows (3 linear + 3 angular).  Maybe this should be (6,7) (8 coordinate frames, but 7 joints)
     elbow_jacobian = np.zeros((6, 8))  # technically this should be (6,4)
 
     for i in range(8):
@@ -194,7 +191,7 @@ def compute_transformation_matrices_and_jacobian(joint_angles, who, length, side
         Roz_i = R_0i[:, 2]
         jacobian[0:3, i] = np.cross(
             Roz_i, position_hand - p_i
-        )  # Linear part - from lecture slides
+        )  # Linear part for a revolute joint
         # jacobian[3:6, i] = 0                                 # Angular part is being NEGLECTED
         # elbow_jacobian[3:6, i] = 0
         if i < 4:  # successive joint params have no affect on the elbow position
@@ -209,23 +206,6 @@ def compute_transformation_matrices_and_jacobian(joint_angles, who, length, side
         jacobian[:, :-1],
     )  # T04, T08, jacobian (ignoring angular twist), elbow_jacobian (ignoring angular twist)
 
-    # T01 = Tbase0 @ mattransfo(alpha[0], d[0], th[0], r[0])
-    # T12 = mattransfo(alpha[1], d[1], th[1], r[1])
-    # T23 = mattransfo(alpha[2], d[2], th[2], r[2])
-    # T34 = mattransfo(alpha[3], d[3], th[3], r[3])
-    # T45 = mattransfo(alpha[4], d[4], th[4], r[4])
-    # T56 = mattransfo(alpha[5], d[5], th[5], r[5])
-    # T67 = mattransfo(alpha[6], d[6], th[6], r[6])
-    # T78 = mattransfo(alpha[7], d[7], th[7], r[7])
-
-    # T02 = T01 @ T12
-    # T03 = T02 @ T23
-    # T04 = T03 @ T34
-    # T05 = T04 @ T45
-    # T06 = T05 @ T56
-    # T07 = T06 @ T67
-    # T08 = T07 @ T78
-    # return T04, T08
 
 
 def forward_kinematics(
@@ -238,32 +218,6 @@ def forward_kinematics(
     position_elbow = np.array(T04[0:3, 3], dtype=np.float64).flatten()
     position_hand = np.array(T08[0:3, 3], dtype=np.float64).flatten()
     return position_elbow, position_hand
-
-
-def forward_kinematics_with_jacobian(
-    joint_angles, who="reachy", length=[0.28, 0.25, 0.075], side="right"
-):
-    """
-    Calculate the hand-effector position using forward kinematics.
-
-    Args:
-        joint_angles: The joint angles of the robotic arm.
-        who: The type of robotic arm.
-        length: The length of the robotic arm.
-        side: The side of the robotic arm.
-
-    Returns:
-        T04: The transformation matrix of the elbow.
-        T08: The transformation matrix of the hand.
-        elbow_jacobian: The Jacobian matrix of the elbow.
-        jacobian: The Jacobian matrix for the hand.
-    """
-    T04, T08, elbow_jacobian, jacobian = compute_transformation_matrices_and_jacobian(
-        joint_angles, who, length, side
-    )
-    position_elbow = np.array(T04[0:3, 3], dtype=np.float64).flatten()
-    position_hand = np.array(T08[0:3, 3], dtype=np.float64).flatten()
-    return position_elbow, position_hand, elbow_jacobian, jacobian
 
 
 def cost_function(
@@ -325,7 +279,7 @@ def jac_analytical_fixed_wrist(
     number_joints = len(joint_angles)
     jac = np.zeros(number_joints)
     current_elbow_coords, current_ee_coords, fk_elbow_jacob, fk_ee_jacob = (
-        forward_kinematics_with_jacobian(joint_angles, who, length, side)
+        fixed_wrist_forward_kinematics_with_jacobian(joint_angles, who, length, side)
     )
 
     hand_error = np.zeros(6)
@@ -347,14 +301,6 @@ def jac_analytical_fixed_wrist(
         elbow_term = elbow_error / elbow_norm
 
     jac = -hand_term @ fk_ee_jacob - elbow_weight * elbow_term @ fk_elbow_jacob
-    '''for i in range(number_joints):
-        fk_hand_jacob_qi = fk_ee_jacob[:, i]
-        fk_elbow_jacob_qi = fk_elbow_jacob[:, i]
-
-        jac[i] = -np.dot(hand_term, fk_hand_jacob_qi) - elbow_weight * np.dot(
-            elbow_term, fk_elbow_jacob_qi
-        )'''
-
     return jac
 
 
@@ -374,15 +320,26 @@ def inverse_kinematics_fixed_wrist(
     pi = np.pi
     # Convert initial guess from degrees to radians
     initial_guess_rad = np.deg2rad(initial_guess)
-    joint_limits_fixed_wrist = [
-        (-1.0 * pi, 0.5 * pi),
-        (-1.0 * pi, 10 / 180 * pi),
-        (-0.5 * pi, 0.5 * pi),
-        (-125 / 180 * pi, 0),
-        (0, 0),
-        (0, 0),
-        (0, 0),
-    ]
+    if side == "right":
+        joint_limits_fixed_wrist = [
+            (-1.0 * pi, 0.5 * pi),
+            (-1.0 * pi, 10 / 180 * pi),
+            (-0.5 * pi, 0.5 * pi),
+            (-125 / 180 * pi, 0),
+            (0, 0),
+            (0, 0),
+            (0, 0),
+        ]
+    elif side == "left":
+        joint_limits_fixed_wrist = [
+            (-1.0 * pi, 0.5 * pi),
+            (-10 / 180 * pi,  1.0 * pi),
+            (-0.5 * pi, 0.5 * pi),
+            (-125 / 180 * pi, 0),
+            (0, 0),
+            (0, 0),
+            (0, 0),
+        ]
     # joint_limits = [
     #     (-1.0 * pi, 0.5 * pi),
     #     (-1.0 * pi, 10 / 180 * pi),

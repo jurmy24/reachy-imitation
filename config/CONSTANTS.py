@@ -37,6 +37,7 @@ def get_zero_pos(reachy, arm="both"):
                 reachy.r_arm.r_forearm_yaw: 0,
                 reachy.r_arm.r_wrist_pitch: 0,
                 reachy.r_arm.r_wrist_roll: 0,
+                reachy.r_arm.r_gripper: 10,
             }
         )
 
@@ -50,34 +51,19 @@ def get_zero_pos(reachy, arm="both"):
                 reachy.l_arm.l_forearm_yaw: 0,
                 reachy.l_arm.l_wrist_pitch: 0,
                 reachy.l_arm.l_wrist_roll: 0,
+                reachy.l_arm.l_wrist_roll: -10,
             }
         )
 
     return zero_pos
 
 
-# TODO: check if this one is necessary
-def get_ordered_joint_names(reachy, arm="right"):
-    """Get the ordered list of joint names from a reachy instance."""
-    if arm == "right":
-        return [
-            reachy.r_arm.r_shoulder_pitch,
-            reachy.r_arm.r_shoulder_roll,
-            reachy.r_arm.r_arm_yaw,
-            reachy.r_arm.r_elbow_pitch,
-            reachy.r_arm.r_forearm_yaw,
-            reachy.r_arm.r_wrist_pitch,
-            reachy.r_arm.r_wrist_roll,
-        ]
-    elif arm == "left":
-        return [
-            reachy.l_arm.l_shoulder_pitch,
-            reachy.l_arm.l_shoulder_roll,
-            reachy.l_arm.l_arm_yaw,
-            reachy.l_arm.l_elbow_pitch,
-            reachy.l_arm.l_forearm_yaw,
-            reachy.l_arm.l_wrist_pitch,
-            reachy.l_arm.l_wrist_roll,
-        ]
-    else:
-        raise ValueError("Invalid arm")
+def get_finger_tips(mp_hands):
+    """Get the finger tip landmarks from the MediaPipe hands module."""
+    return [
+        mp_hands.HandLandmark.THUMB_TIP.value,
+        mp_hands.HandLandmark.INDEX_FINGER_TIP.value,
+        mp_hands.HandLandmark.MIDDLE_FINGER_TIP.value,
+        mp_hands.HandLandmark.RING_FINGER_TIP.value,
+        mp_hands.HandLandmark.PINKY_TIP.value,
+    ]
