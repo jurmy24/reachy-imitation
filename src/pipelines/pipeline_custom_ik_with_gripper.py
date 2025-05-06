@@ -158,14 +158,16 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
             last_movement_time = time.time()
             last_hand_movement_time = time.time()
 
-            print("Starting shadowing. Press 'q' to exit safely.")
+            print("Starting shadowing. Press 'control c' to exit safely")
 
             while not cleanup_requested:
-                # Check for exit key
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    cleanup_requested = True
 
                 loop_start_time = time.time()
+
+                # ! The absence of this might be causing a lag
+                #  # Check for exit key
+                # if cv2.waitKey(1) & 0xFF == ord("q"):
+                #     cleanup_requested = True
 
                 # 1. get data from RealSense camera
                 camera_start = time.time()
@@ -351,6 +353,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                     and successful_gripper_update
                 ):
                     last_hand_movement_time = current_time
+                    gripper_start = time.time()
                     # Apply joint positions for all arms that have updates
                     for current_arm in arms_to_process:
                         
@@ -372,7 +375,8 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                                     )
                             else:
                                 print(f"Gripper joint {joint} not found in joint_dict")
-                
+                    gripper_end = time.time()
+                    timings["gripper_apply"].append(gripper_end - gripper_start)
 
                 if successful_update or successful_gripper_update:
                     update_count += 1

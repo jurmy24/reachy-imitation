@@ -200,8 +200,8 @@ def fixed_wrist_forward_kinematics_with_jacobian(joint_angles, who, length, side
         #     elbow_jacobian[0:3, i] = 0
 
     return (
-        T04,
-        T08,
+        position_elbow,
+        position_hand,
         elbow_jacobian[:, :-1],
         jacobian[:, :-1],
     )  # T04, T08, jacobian (ignoring angular twist), elbow_jacobian (ignoring angular twist)
@@ -354,7 +354,7 @@ def inverse_kinematics_fixed_wrist(
     result = minimize(
         cost_function,
         initial_guess_rad,  # Use radian value for optimization
-        jac=jac_fd,
+        jac=jac_analytical_fixed_wrist,
         args=(ee_coords, elbow_coords, elbow_weight, who, length, side),
         method="SLSQP",
         bounds=joint_limits_fixed_wrist,
