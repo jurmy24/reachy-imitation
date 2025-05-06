@@ -5,7 +5,7 @@ from src.utils.hands import calculate_2D_distance
 from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
 from src.models.custom_ik import inverse_kinematics_fixed_wrist
 from config.CONSTANTS import get_finger_tips
-
+from statistics import mode
 
 class ShadowArm:
     """Base class for robot arm operations and tracking"""
@@ -34,6 +34,8 @@ class ShadowArm:
         self.max_change = max_change  # maximum change in degrees per joint per update
         self.prev_hand_pos = self.arm.forward_kinematics()[:3, 3]
         self.hand_closed = False
+        self.hand_closed_history = []  # List to store hand positions for smoothing
+        self._hand_history_size = 3 
 
     def get_landmark_indices(self):
         """Return MediaPipe landmark indices for this arm
@@ -139,6 +141,7 @@ class ShadowArm:
         # Check if the desired position is different from current position
         current_ee_pose_matrix = self.arm.forward_kinematics()
         current_pos = current_ee_pose_matrix[:3, 3]
+        
         already_at_position = np.allclose(
             current_pos, smoothed_position, atol=target_pos_tolerance
         )
@@ -264,7 +267,22 @@ class ShadowArm:
             print(f"{self.side.capitalize()} arm IK calculation error: {e}")
             return False
 
-    def is_hand_closed(self, hand_landmarks, mp_hands):
+
+    def get_hand_closedness(self, hand_landmarks, mp_hands, conservative=True):
+        if conservative:
+            is_new_landmark_closed = self._is_hand_half_closed(hand_landmarks, mp_hands)
+        else:
+            is_new_landmark_closed = self._is_hand_closed(hand_landmarks, mp_hands)
+        
+        self.hand_closed_history.append(is_new_landmark_closed)
+        if len(self.hand_closed_history) > self._hand_history_size:
+            self.hand_closed_history.pop(0)
+        
+        return mode(self.hand_closed_history)  # Return the most common value in the history
+
+
+
+    def _is_hand_closed(self, hand_landmarks, mp_hands):
         palm_base = hand_landmarks.landmark[0]
         open_fingers = 0
         for tip in get_finger_tips(mp_hands):
@@ -273,9 +291,27 @@ class ShadowArm:
             ) > calculate_2D_distance(hand_landmarks.landmark[tip - 3], palm_base):
                 open_fingers += 1
         return open_fingers <= 2
+    
+
+    def _is_hand_half_closed(self, hand_landmarks, mp_hands):
+        """
+        Can be used as a less conservative version of is_hand_closed
+        """
+        palm_base = hand_landmarks.landmark[0]
+        half_closed_fingers = 0
+        for tip in get_finger_tips(mp_hands):
+            tip_to_palm = calculate_2D_distance(hand_landmarks.landmark[tip], palm_base)
+            if tip_to_palm < (calculate_2D_distance(hand_landmarks.landmark[tip - 2], palm_base)):
+                half_closed_fingers += 1
+        return (
+            half_closed_fingers >= 3
+        )  # Considérer la main entreouverte si au moins 3 doigts sont entreouverts
+
+    
+
 
     def close_hand(self):
-        value = 10 if self.side == "right" else -10
+        value = 10 if self.side == "right" else -10 
         self.joint_dict[f"{self.prefix}gripper"] = value
 
     def open_hand(self):

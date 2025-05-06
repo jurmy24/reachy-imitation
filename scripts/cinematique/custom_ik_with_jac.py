@@ -271,18 +271,6 @@ def forward_kinematics(
     return position_e, position
 
 
-def forward_kinematics_with_jacobian(
-    joint_angles, who="reachy", length=[0.28, 0.25, 0.075], side="right"
-):
-    """
-    Calculate the hand-effector position using forward kinematics.
-    """
-    position_e, position, jacobian, elbow_jacobian = (
-        compute_transformation_matrices_and_jacobian(joint_angles, who, length, side)
-    )
-
-    return position_e, position, jacobian, elbow_jacobian
-
 
 def cost_function(
     joint_angles, target_ee_coords, target_elbow_coords, elbow_weight, who, length, side
@@ -364,13 +352,8 @@ def jac_analytical_fixed_wrist(
     else:
         elbow_term = elbow_error / elbow_norm
 
-    for i in range(number_joints):
-        fk_hand_jacob_qi = fk_hand_jacob[:, i]
-        fk_elbow_jacob_qi = fk_elbow_jacob[:, i]
+    jac = - hand_term @ fk_hand_jacob - elbow_weight * elbow_term @ fk_elbow_jacob
 
-        jac[i] = -np.dot(hand_term, fk_hand_jacob_qi) - elbow_weight * np.dot(
-            elbow_term, fk_elbow_jacob_qi
-        )
 
     return jac
 
@@ -403,7 +386,7 @@ def inverse_kinematics_fixed_wrist(
     result = minimize(
         cost_function,
         initial_guess_rad,  # Use radian value for optimization
-        jac=jac_analytical_fixed_wrist,
+        jac=jac_fd,
         args=(ee_coords, elbow_coords, elbow_weight, who, length, side),
         method="SLSQP",
         bounds=joint_limits_fixed_wrist,
@@ -414,7 +397,7 @@ def inverse_kinematics_fixed_wrist(
     # Convert result from radians to degrees
     return np.rad2deg(result.x)
 
-
+"""
 def inverse_kinematics_fixed_wrist(
     hand_position,
     elbow_position,
@@ -422,9 +405,7 @@ def inverse_kinematics_fixed_wrist(
     elbow_weight=0.1,
     L=["reachy", 0.28, 0.25, 0.075],
 ):
-    """
-    Implement the inverse kinematics.
-    """
+
     pi = np.pi
     # joint_limits = [
     #     (-1.0 * pi, 0.5 * pi),
@@ -456,7 +437,7 @@ def inverse_kinematics_fixed_wrist(
     )
 
     return result.x
-
+"""
 
 if __name__ == "__main__":
 

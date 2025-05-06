@@ -111,7 +111,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
             0.005  # update current position if it has moved more than this
         )
         torque_limit = 100.0  # as a percentage of maximum
-        handedness_certainty_threshold = 0.3
+        handedness_certainty_threshold = 0.8
         ########################################
 
         ############### FLAGS ##################
@@ -166,8 +166,8 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
 
                 # ! The absence of this might be causing a lag
                 #  # Check for exit key
-                # if cv2.waitKey(1) & 0xFF == ord("q"):
-                #     cleanup_requested = True
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    cleanup_requested = True
 
                 # 1. get data from RealSense camera
                 camera_start = time.time()
@@ -271,6 +271,9 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                                 .classification[0]
                                 .score
                             )
+                            # handedness certainty can also be verified with a check if the previous hand in 
+                            # the multi_hand_landmarks array was detected to be the same, and having a lower_handedness_certainty
+                            # This is done in controleMainWithDepth.py in ../../scripts/pince 
                             if handedness_certainty < handedness_certainty_threshold:
                                 continue
 
@@ -297,7 +300,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                             already_detected_handedness = hand_type
                             # both_hand_landmarks[index] = hand_landmarks
                             hand_landmarks = hand_results.multi_hand_landmarks[index]
-                            hand_closed = arm_to_process_hand.is_hand_closed(
+                            hand_closed = arm_to_process_hand.get_hand_closedness(
                                 hand_landmarks, self.mp_hands
                             )
                             if arm_to_process_hand.hand_closed != hand_closed:
@@ -317,6 +320,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
 
                 # 6. Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
+                
                 if (
                     current_time - last_movement_time >= movement_interval
                     and successful_update
@@ -345,7 +349,7 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                                     )
                     apply_end = time.time()
                     timings["apply_positions"].append(apply_end - apply_start)
-
+                
                 
                 # # Gripper Set Position
                 if (

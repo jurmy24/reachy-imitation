@@ -14,11 +14,10 @@ from matplotlib.animation import FuncAnimation
 #     sys.path.append(module_path)
 from filterpy.kalman import KalmanFilter
 
-
 class KalmanFilter3D:
     def __init__(self, threshold = 0.5):
         self.kf = KalmanFilter(dim_x=6, dim_z=3)
-        dt = 1.0  # Time step
+        dt = 0.1  # Time step
 
         # State transition matrix
         self.kf.F = np.array([
