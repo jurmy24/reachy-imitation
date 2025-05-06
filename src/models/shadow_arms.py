@@ -33,6 +33,10 @@ class ShadowArm:
         self.position_alpha = position_alpha  # For EMA position smoothing
         self.max_change = max_change  # maximum change in degrees per joint per update
         self.prev_hand_pos = self.arm.forward_kinematics()[:3, 3]
+        self.prev_hand_position = None
+        self.prev_elbow_position = None
+        self.prev_shoulder_position = None
+
         self.hand_closed = False
 
     def get_landmark_indices(self):
@@ -58,6 +62,8 @@ class ShadowArm:
 
     def get_coordinates(self, landmarks_data, depth_frame, w, h, intrinsics):
         """Get 3D coordinates for this arm"""
+        VISIBILITY_THRESHOLD = 0.5
+
         shoulder = get_3D_coordinates(
             landmarks_data[self.landmark_indices["shoulder"]],
             depth_frame,
@@ -80,6 +86,19 @@ class ShadowArm:
             h,
             intrinsics,
         )
+
+        shoulder_lm = landmarks_data[self.landmark_indices["shoulder"]]
+        elbow_lm = landmarks_data[self.landmark_indices["elbow"]]
+        index_lm = landmarks_data[self.landmark_indices["index"]]
+        pinky_lm = landmarks_data[self.landmark_indices["pinky"]]
+
+        if (shoulder_lm.visibility < VISIBILITY_THRESHOLD):
+            shoulder = None
+        if (elbow_lm.visibility < VISIBILITY_THRESHOLD):
+            elbow = None
+        if (index_lm.visibility < VISIBILITY_THRESHOLD) or (pinky_lm.visibility < VISIBILITY_THRESHOLD):
+            hand = None
+
         return shoulder, elbow, hand
 
     def get_joint_array(self) -> np.ndarray:
@@ -195,7 +214,8 @@ class ShadowArm:
             for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
                 # Apply rate limiting
                 limited_change = np.clip(
-                    value - self.joint_array[i], -self.max_change, self.max_change
+                    value - self.joint_array[i], -
+                    self.max_change, self.max_change
                 )
                 self.joint_array[i] += limited_change
                 self.joint_dict[name] = self.joint_array[i]
@@ -251,13 +271,14 @@ class ShadowArm:
             for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
                 # Apply rate limiting
                 limited_change = np.clip(
-                    value - self.joint_array[i], -self.max_change, self.max_change
+                    value - self.joint_array[i], -
+                    self.max_change, self.max_change
                 )
                 self.joint_array[i] += limited_change
                 self.joint_dict[name] = self.joint_array[i]
 
             # Handle gripper separately - maintain closed
-            #self.joint_dict[f"{self.prefix}gripper"] = 0
+            # self.joint_dict[f"{self.prefix}gripper"] = 0
 
             return True
         except Exception as e:

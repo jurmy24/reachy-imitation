@@ -205,9 +205,21 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
                     )
                     coord_end = time.time()
                     timings["get_coordinates"].append(coord_end - coord_start)
+                    if shoulder is None:
+                        shoulder = current_arm.prev_shoulder_position
+                    else :
+                        current_arm.prev_shoulder_position = shoulder
 
-                    if shoulder is None or hand is None:
-                        continue
+                    if elbow is None:
+                        elbow = current_arm.prev_elbow_position
+                    else :
+                        current_arm.prev_elbow_position = elbow
+
+                    if hand is None:
+                        hand = current_arm.prev_hand_position
+                    else:
+                        current_arm.prev_hand_position = hand
+
 
                     conv_start = time.time()
                     target_ee_coord = get_reachy_coordinates(
