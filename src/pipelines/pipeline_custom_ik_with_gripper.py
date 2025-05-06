@@ -210,6 +210,8 @@ class Pipeline_custom_ik_with_gripper(Pipeline):
 
                     if shoulder is None or hand is None:
                         continue
+                    
+                    #shoulder, elbow, hand = current_arm.apply_kalman_filter_to_coordinates(shoulder, elbow, hand)
 
                     conv_start = time.time()
                     target_ee_coord = get_reachy_coordinates(

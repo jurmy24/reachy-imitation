@@ -17,7 +17,7 @@ from filterpy.kalman import KalmanFilter
 class KalmanFilter3D:
     def __init__(self, threshold = 0.5):
         self.kf = KalmanFilter(dim_x=6, dim_z=3)
-        dt = 0.1  # Time step
+        dt = 1 / 15.0  # Time step # 15 represents the approximate frame rate - Verify this 
 
         # State transition matrix
         self.kf.F = np.array([
@@ -36,8 +36,8 @@ class KalmanFilter3D:
             [0, 0, 1, 0, 0, 0],
         ])
 
-        self.kf.R *= 0.1  # Measurement noise
-        self.kf.P *= 1000.  # Initial covariance
+        self.kf.R *= 0.5  # Measurement noise
+        self.kf.P *= 200.  # Initial covariance
         self.kf.Q *= 1e-4  # Process noise
 
         self.kf.x[:6] = np.zeros((6, 1))  # Initial state
@@ -52,10 +52,10 @@ class KalmanFilter3D:
     def update(self, measurement):
         measurement = np.array(measurement)
 
-        # Reject if too far from last prediction
-        if np.linalg.norm(measurement - self.last_output) > self.threshold:
-            # Skip update
-            return self.last_output
+        # # Reject if too far from last prediction
+        # if np.linalg.norm(measurement - self.last_output) > self.threshold:
+        #     print("Measurement rejected due to threshold limit.")
+        #     return self.last_output
 
         self.kf.predict()
         self.kf.update(measurement)
@@ -339,5 +339,5 @@ def main():
 if __name__ == "__main__":
     import mediapipe as mp
     MAX_REACH = 1 #m
-    FRAME_CAP = 400
+    FRAME_CAP = 200
     main()

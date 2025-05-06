@@ -6,6 +6,7 @@ from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
 from src.models.custom_ik import inverse_kinematics_fixed_wrist
 from config.CONSTANTS import get_finger_tips
 from statistics import mode
+from src.models.kalmann import KalmanFilter3D
 
 class ShadowArm:
     """Base class for robot arm operations and tracking"""
@@ -32,7 +33,12 @@ class ShadowArm:
         self.smoothing_buffer_size = smoothing_buffer_size
         self.position_alpha = position_alpha  # For EMA position smoothing
         self.max_change = max_change  # maximum change in degrees per joint per update
-        self.prev_hand_pos = self.arm.forward_kinematics()[:3, 3]
+        self.prev_target_hand_position = self.arm.forward_kinematics()[:3, 3]
+
+        # self.kf_shoulder = KalmanFilter3D()
+        # self.kf_elbow = KalmanFilter3D()
+        # self.kf_wrist = KalmanFilter3D()
+        
         self.hand_closed = False
         self.hand_closed_history = []  # List to store hand positions for smoothing
         self._hand_history_size = 3 
@@ -82,6 +88,14 @@ class ShadowArm:
             h,
             intrinsics,
         )
+        return shoulder, elbow, hand
+
+    def apply_kalman_filter_to_coordinates(self, shoulder, elbow, hand):
+        """Apply Kalman filter to the coordinates of the arm"""
+        shoulder = self.kf_shoulder.update(shoulder)
+        elbow = self.kf_elbow.update(elbow)
+        hand = self.kf_wrist.update(hand)
+
         return shoulder, elbow, hand
 
     def get_joint_array(self) -> np.ndarray:
@@ -135,28 +149,29 @@ class ShadowArm:
         # Compute EMA for smoother position
         smoothed_position = (
             self.position_alpha * target_ee_coord
-            + (1 - self.position_alpha) * self.prev_hand_pos
+            + (1 - self.position_alpha) * self.prev_target_hand_position
         )
+        #smoothed_position = target_ee_coord 
 
         # Check if the desired position is different from current position
         current_ee_pose_matrix = self.arm.forward_kinematics()
-        current_pos = current_ee_pose_matrix[:3, 3]
+        actual_current_position = current_ee_pose_matrix[:3, 3]
         
         already_at_position = np.allclose(
-            current_pos, smoothed_position, atol=target_pos_tolerance
+            actual_current_position, smoothed_position, atol=target_pos_tolerance
         )
 
         # Check if the position has changed significantly from the previous position
         should_update_position = (
             not np.allclose(
-                self.prev_hand_pos, smoothed_position, atol=movement_min_tolerance
+                self.prev_target_hand_position, smoothed_position, atol=movement_min_tolerance
             )
             and not already_at_position
         )
 
         # Update previous position if we're going to move
         if should_update_position:
-            self.prev_hand_pos = smoothed_position
+            self.prev_target_hand_position = smoothed_position
 
         # ! We're always updating now and never skipping
         return should_update_position, smoothed_position
