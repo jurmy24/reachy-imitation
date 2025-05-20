@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from human_arm_kinematics import forward_kinematics
-from arm_visualizer import visualize_robot, create_interactive_robot, animate_robot
+#from human_arm_kinematics import forward_kinematics
+#from arm_visualizer import visualize_robot, create_interactive_robot, animate_robot
 import numpy as np
 import sys
 import os
@@ -450,7 +450,7 @@ def main():
 if __name__ == "__main__":
     import mediapipe as mp
     MAX_REACH = 1 #m
-    FRAME_CAP = 120
+    FRAME_CAP = 200
     FOREARM_LENGTH = 0.3
     UPPER_ARM_LENGTH = 0.3
     main()
