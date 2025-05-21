@@ -446,21 +446,6 @@ def main():
     # Uncomment to save animation
     # animation.save('robot_animation.mp4', writer='ffmpeg', dpi=100)
 
-def create_hand_claw_rawr():
-    """
-    Return claw geometry defined in local coordinates (origin at wrist).
-    Could be a triangle, cross, or set of lines.
-    """
-    # Example: 3 fingers extending out from wrist
-    points = np.array([
-        [0.0, 0.0, 0.0],   # base (wrist)
-        [0.05, 0.02, 0.0],  # finger 1
-        [0.05, -0.02, 0.0], # finger 2
-        [0.05, 0.0, 0.03],  # finger 3
-    ])
-    return points
-
-
 
 if __name__ == "__main__":
     import mediapipe as mp

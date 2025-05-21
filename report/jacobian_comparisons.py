@@ -470,8 +470,6 @@ if __name__ == "__main__":
     print("===== IN-BUILT JACOBIAN =====")
     test_solver_type(None)
 
-    # Questions - should minimize timer . stop be called ?
-    # should 
 
     try:
         from reachy_sdk import ReachySDK        
