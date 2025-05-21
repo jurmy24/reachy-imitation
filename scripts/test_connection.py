@@ -6,7 +6,7 @@ from reachy_sdk.trajectory.interpolation import InterpolationMode
 import time
 
 # Remplacez '192.168.X.X' par l'adresse IP de Reachy
-reachy = ReachySDK(host="138.195.196.90")
+reachy = ReachySDK(host="192.168.100.2")
 
 # Vérifiez si la connexion fonctionne
 for name, joint in reachy.joints.items():
@@ -122,6 +122,15 @@ def test_strong_man():
         interpolation_mode=InterpolationMode.MINIMUM_JERK,
                 )
 
+def read_forces():
+
+    while True:
+        user_input = input("press enter (or anything) to print forces, q+enter to quit")
+        if user_input.lower() == 'q':
+            break
+        print(f" right hand force {reachy.force_sensors.r_force_gripper.force}")
+        print(f" left hand force {reachy.force_sensors.l_force_gripper.force}")
+
 
 if __name__ == "__main__":
     #test_bras_droit()
@@ -130,11 +139,13 @@ if __name__ == "__main__":
     #time.sleep(0.5)
     #zero_deux_bras()
 
-    test_strong_man()
-    time.sleep(3)
-    zero_deux_bras()
+    read_forces()
 
+    # test_strong_man()
+    # time.sleep(3)
+    # zero_deux_bras()
 
+ 
 
     reachy.turn_off_smoothly("r_arm")
     reachy.turn_off_smoothly("l_arm")

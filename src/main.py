@@ -1,18 +1,20 @@
 from reachy_sdk import ReachySDK
 from src.mapping.map_to_robot_coordinates import get_scale_factors
 from src.pipelines.pipeline_custom_ik_with_gripper import Pipeline_custom_ik_with_gripper
+from src.pipelines.pipeline_custom_ik_force_gripper import Pipeline_custom_ik_force_gripper
+
 from src.pipelines.pipeline_custom_ik import Pipeline_custom_ik
 from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 
 # Create the overarching Reachy instance for this application
-reachy = ReachySDK(host="138.195.196.90")
+reachy = ReachySDK(host="192.168.100.2")
 
 
 def main():
     calibrate = False
     arm = "both"
 
-    pipeline = Pipeline_custom_ik_with_gripper(reachy)
+    pipeline = Pipeline_custom_ik_force_gripper(reachy)
     if calibrate:
         print("Running initiation protocol...")
         pipeline.initiation_protocol()

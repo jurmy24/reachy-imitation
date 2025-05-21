@@ -7,7 +7,12 @@ from src.models.custom_ik import inverse_kinematics_fixed_wrist
 from config.CONSTANTS import get_finger_tips
 from statistics import mode
 from src.models.kalmann import KalmanFilter3D
+from enum import Enum
 
+class HAND_STATUS(Enum):
+    CLOSED = 1
+    CLOSING = 2
+    OPEN = 3 
 
 class ShadowArm:
     """Base class for robot arm operations and tracking"""
@@ -42,15 +47,21 @@ class ShadowArm:
         # self.kf_elbow = KalmanFilter3D()
         # self.kf_wrist = KalmanFilter3D()
 
-        self.hand_closed = False
+        self.hand_closed = HAND_STATUS.OPEN
         self.hand_closed_history = []  # List to store hand positions for smoothing
         self._hand_history_size = 3
 
         # Force gripper
         # ! These values are arbitrary and should be tuned by testing with Reachy
-        self.force_max_tolerance = -70 if self.side == "right" else 70
-        self.force_min_tolerance = -40 if self.side == "right" else 40
-        self.gripper_movement_threshold = -5 if side == "right" else 5
+        # self.force_max_tolerance = -70 if self.side == "right" else 70
+        # self.force_min_tolerance = -40 if self.side == "right" else 40
+
+        self.force_max_tolerance = 0
+        self.force_min_tolerance = 2000000 #f self.side == "right" else 2000000
+        self.gripper_movement_threshold = 5 if side == "right" else -5
+        self.open_gripper_value = -60 if self.side == "right" else 60
+        self.closed_gripper_value = 12 if self.side == "right" else -12
+
 
     def get_landmark_indices(self):
         """Return MediaPipe landmark indices for this arm
@@ -300,9 +311,11 @@ class ShadowArm:
         if len(self.hand_closed_history) > self._hand_history_size:
             self.hand_closed_history.pop(0)
 
-        return mode(
-            self.hand_closed_history
-        )  # Return the most common value in the history
+        if mode(self.hand_closed_history) is True: #this should never return HAND_STATUS.CLOSING
+            return HAND_STATUS.CLOSED
+        else:
+            return HAND_STATUS.OPEN 
+            
 
     def _is_hand_closed(self, hand_landmarks, mp_hands):
         palm_base = hand_landmarks.landmark[0]
@@ -344,33 +357,43 @@ class ShadowArm:
     def close_hand(self):
         """Close the gripper using force feedback"""
         current_force = self.get_force_reading()
-        if self.joint_dict[f"{self.prefix}gripper"] is None:
-            self.joint_dict[f"{self.prefix}gripper"] = self.arm.joints[
-                f"{self.prefix}gripper"
-            ].pos
+        print("FORCE READING: ", current_force)
+        if self.joint_dict.get(f"{self.prefix}gripper") is None:
+            self.joint_dict[f"{self.prefix}gripper"] = getattr(getattr(self.arm, f"{self.prefix}gripper"), "present_position")
         # If current force is between the max and min tolerance, don't move the gripper
-        if abs(current_force) > abs(self.force_min_tolerance) and abs(
-            current_force
-        ) < abs(self.force_max_tolerance):
-            value = 0
-        elif abs(current_force) > abs(self.force_max_tolerance):
+        
+        if (self.side == "right" and current_force > 0) or (self.side == "left" and current_force < 0): #too much power! reachy must be stopped
             value = (
                 self.joint_dict[f"{self.prefix}gripper"]
                 - self.gripper_movement_threshold
             )
-        elif abs(current_force) < abs(self.force_min_tolerance):
+            self.hand_closed = HAND_STATUS.CLOSING
+
+        elif abs(current_force) <= self.force_min_tolerance and abs(
+            current_force
+        ) >= abs(self.force_max_tolerance): #i.e. in the sweet spot 
+            #value = 0
+            value = self.joint_dict[f"{self.prefix}gripper"]
+            self.hand_closed = HAND_STATUS.CLOSED
+
+        else: # abs(current_force) < abs(self.force_min_tolerance): # Too little power! reachy must be stronger
             value = (
                 self.joint_dict[f"{self.prefix}gripper"]
                 + self.gripper_movement_threshold
             )
-        else:
-            print(
-                f"Warning: Force reading out of range on {self.side} gripper: {current_force:.1f}g"
-            )
+            self.hand_closed = HAND_STATUS.CLOSING
+            if self.side == "right": # don't want to over do it :)
+                value = min(value, self.closed_gripper_value)
+            else:
+                value = max(value, self.closed_gripper_value)
+        # else:
+        #     print(
+        #         f"Warning: Force reading out of range on {self.side} gripper: {current_force:.1f}g"
+        #     )
 
         # value = 10 if self.side == "right" else -10
         self.joint_dict[f"{self.prefix}gripper"] = value
 
     def open_hand(self):
-        value = -60 if self.side == "right" else 60
-        self.joint_dict[f"{self.prefix}gripper"] = value
+        self.hand_closed = HAND_STATUS.OPEN
+        self.joint_dict[f"{self.prefix}gripper"] = self.open_gripper_value

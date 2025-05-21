@@ -8,8 +8,9 @@ from src.utils.hands import flip_hand_labels
 from src.utils.three_d import get_reachy_coordinates
 from src.pipelines.Pipeline import Pipeline
 from src.reachy.utils import setup_torque_limits
-from src.models.shadow_arms_force import ShadowArm
+from src.models.shadow_arms_force import ShadowArm, HAND_STATUS
 from src.models.custom_ik import minimize_timer  # Import the timer
+import traceback
 
 
 class Pipeline_custom_ik_force_gripper(Pipeline):
@@ -301,14 +302,22 @@ class Pipeline_custom_ik_force_gripper(Pipeline):
                             hand_closed = arm_to_process_hand.get_hand_closedness(
                                 hand_landmarks, self.mp_hands
                             )
+
+                            
                             if arm_to_process_hand.hand_closed != hand_closed:
                                 # update the hand state - using force
                                 successful_gripper_update = True
-                                arm_to_process_hand.hand_closed = hand_closed
-                                if hand_closed:
+                                #arm_to_process_hand.hand_closed = hand_closed
+
+                                # One thing with the logic here to be conscious of is that is does rely a bit on the delay from 
+                                # " current_time - last_hand_movement_time >= movement_interval "" not just over-riding all the incremental 5 degree updates when closing 
+                                if hand_closed == HAND_STATUS.CLOSED or hand_closed == HAND_STATUS.CLOSING:
+                                    print("Closing hand COMMAND SENDING")
                                     arm_to_process_hand.close_hand()
                                 else:
+                                    print("OPENING hand COMMAND SENDING")
                                     arm_to_process_hand.open_hand()
+                                
 
                 hand_data_end = time.time()
                 timings["hand_data_processing"].append(hand_data_end - hand_data_start)
@@ -316,6 +325,7 @@ class Pipeline_custom_ik_force_gripper(Pipeline):
                 # 6. Apply goal positions directly at controlled rate (maximum 30Hz)
                 current_time = time.time()
 
+                
                 if (
                     current_time - last_movement_time >= movement_interval
                     and successful_update
@@ -342,6 +352,7 @@ class Pipeline_custom_ik_force_gripper(Pipeline):
                                     print(f"Error setting position for {key}: {e}")
                     apply_end = time.time()
                     timings["apply_positions"].append(apply_end - apply_start)
+                
 
                 # # Gripper Set Position
                 if (
@@ -384,6 +395,8 @@ class Pipeline_custom_ik_force_gripper(Pipeline):
 
         except Exception as e:
             print(f"Failed to run the shadow pipeline: {e}")
+            traceback.print_exc()
+
         finally:
             # Print final detailed performance statistics
             print("\n===== PERFORMANCE ANALYSIS =====")
