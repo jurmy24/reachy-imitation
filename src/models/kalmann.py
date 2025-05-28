@@ -23,9 +23,13 @@ class KalmanFilter3D:
             [0, 0, 1, 0, 0, 0],
         ])
 
-        self.kf.R *= 0.5  # Measurement noise
-        self.kf.P *= 200.  # Initial covariance
-        self.kf.Q *= 1e-4  # Process noise
+        # self.kf.R *= 0.5  # Measurement noise
+        # self.kf.P *= 200.  # Initial covariance
+        # self.kf.Q *= 1e-4  # Process noise
+
+        self.kf.R *= 5  # Measurement noise
+        self.kf.P *= 100.  # Initial covariance
+        self.kf.Q *= 1e-2  # Process noise
 
         self.kf.x[:6] = np.zeros((6, 1))  # Initial state
         self.last_output = np.zeros(3)

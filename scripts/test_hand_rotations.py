@@ -5,7 +5,7 @@ from reachy_sdk.trajectory import goto
 from reachy_sdk.trajectory.interpolation import InterpolationMode
 
 # Remplacez '192.168.X.X' par l'adresse IP de Reachy
-reachy = ReachySDK(host="138.195.196.90")
+reachy = ReachySDK(host="192.168.100.2")
 import numpy as np
 import time
 
@@ -60,12 +60,12 @@ def test_main_droit() -> None:
     #goto({joint: pos for joint,pos in zip(ordered_joint_names, joint_pos_A)}, duration=1.0)
     #time.sleep(4)
     goto({joint: pos for joint,pos in zip(ordered_joint_names, joint_pos_B)}, duration=1.0)
-    time.sleep(4)
+    time.sleep(2)
     # for name, joint in reachy.joints.items():
     #     print(f'Joint "{name}" is at pos {joint.present_position} degree.')
 
     goto({joint: pos for joint,pos in zip(ordered_joint_names, joint_pos_C)}, duration=1.0)
-    time.sleep(4)
+    time.sleep(2)
 
     goto(
     goal_positions=zero_position,

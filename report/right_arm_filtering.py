@@ -36,7 +36,7 @@ class KalmanFilter3D:
             [0, 0, 1, 0, 0, 0],
         ])
 
-        self.kf.R *= 10  # Measurement noise
+        self.kf.R *= 5  # Measurement noise
         self.kf.P *= 100.  # Initial covariance
         self.kf.Q *= 1e-2  # Process noise
 
@@ -311,6 +311,7 @@ def visualize_human_arm(trajectories, fps = 30):
     #Setup figure and 3D axis
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection="3d")
+    #ax.set_position([0, 0, 1, 1])
     set_bounds(ax)
     # Get initial joint positions
     # Extract x, y, z coordinates. # 3 joints 
@@ -332,7 +333,9 @@ def visualize_human_arm(trajectories, fps = 30):
     def update_animation(frame):
         # Calculate progress (0 to 1)
         #progress = frame / (duration * fps)
-        ax.set_title(f"Frame Number: {frame}", fontsize=14)
+        #ax.set_title(f"Frame Number: {frame}", fontsize=14)
+        #ax.text2D(0.05, 0.95, f"Frame: {frame}", transform=ax.transAxes, fontsize=12)
+
         shoulder = trajectories[mp_pose.PoseLandmark.RIGHT_SHOULDER][frame]
         elbow = trajectories[mp_pose.PoseLandmark.RIGHT_ELBOW][frame]
         wrist = trajectories[mp_pose.PoseLandmark.RIGHT_WRIST][frame]
@@ -371,6 +374,7 @@ def visualize_human_arm(trajectories, fps = 30):
     )   
 
     plt.tight_layout()
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
     plt.show()
     return animation, fig
 
@@ -397,6 +401,7 @@ def plot_wrist_trajectories(kalman_trajectories, ema_trajectories, raw_trajector
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
+        
         plt.show()
 
 def plot_wrist_trajectories_comparison(kalman_trajectories, ema_trajectories, raw_trajectories):
@@ -441,16 +446,16 @@ def main():
     animation, fig_anim = visualize_human_arm(kalman_trajectories)
     #plt.show()
 
-    plot_wrist_trajectories_comparison(kalman_trajectories, ema_trajectories, raw_trajectories)
+    #plot_wrist_trajectories_comparison(kalman_trajectories, ema_trajectories, raw_trajectories)
     
     # Uncomment to save animation
-    # animation.save('robot_animation.mp4', writer='ffmpeg', dpi=100)
+    animation.save('robot_animation.gif', writer='pillow', dpi=100)
 
 
 if __name__ == "__main__":
     import mediapipe as mp
-    MAX_REACH = 1 #m
-    FRAME_CAP = 200
+    MAX_REACH = 0.8 #m
+    FRAME_CAP = 100
     FOREARM_LENGTH = 0.3
     UPPER_ARM_LENGTH = 0.3
     main()

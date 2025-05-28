@@ -3,6 +3,7 @@ from scipy.optimize import minimize
 import time
 from collections import deque
 
+np.set_printoptions(precision=6, suppress=True)  # Set print options for numpy arrays
 
 
 class MinimizeTimer:
@@ -375,6 +376,7 @@ def test_solver_type(jacobian):
     result = inverse_kinematics_fixed_wrist(
         hand_position, elbow_position, initial_guess, minimize_timer, elbow_weight, who, length, side, jacobian
     )
+    #print(f"Resulting joint angles (degrees): {result}")
     position_elbow, position_hand = forward_kinematics(np.deg2rad(result), who="reachy", length=[0.28, 0.25, 0.075], side="right")
 
     #print(f"Resulting joint angles (degrees): {result}")
@@ -420,23 +422,22 @@ def test_sdk(reachy):
     #transform_matrix = reachy.r_arm.forward_kinematics()
     minimize_timer = MinimizeTimer()
 
-    transform_matrix = np.array([
-    [1, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 0, 1, 0],
-    [0, 0, 0, 1]
-    ])
+    transform_matrix = reachy.r_arm.forward_kinematics()
     
     transform_matrix[:3, 3] = hand_position
-
     minimize_timer.start()
 
     # Compute IK with current joint positions as starting point
     joint_pos = reachy.r_arm.inverse_kinematics(
-        transform_matrix, q0=get_joint_array(reachy)
+        transform_matrix, 
     )
     minimize_timer.stop()
+
+    position_elbow, position_hand = forward_kinematics(np.deg2rad(joint_pos), who="reachy", length=[0.28, 0.25, 0.075], side="right")
+
     stats = minimize_timer.get_stats()
+    print(f"Resulting elbow position: {position_elbow}")
+    print(f"Resulting hand position: {position_hand}")
     print(f"\nTotal time: {stats['total_time']*1000:.2f} ms")
     print(f"Total iterations: UNKNOWN \n")
 
@@ -444,7 +445,7 @@ def test_sdk(reachy):
 if __name__ == "__main__":
 
     # Desired hand position
-    hand_position = np.array([0.3, 0.2, 0.1])
+    hand_position = np.array([0.3, -0.2, 0.1])
 
     # Elbow position and weight
     elbow_position = np.array([0.1, 0, -0.3])
@@ -473,7 +474,7 @@ if __name__ == "__main__":
 
     try:
         from reachy_sdk import ReachySDK        
-        reachy = ReachySDK(host="138.195.196.90")
+        reachy = ReachySDK(host="192.168.100.2")
     except Exception as e:
         print("Reachy SDK not available. Skipping Reachy IK test.")
         reachy = None

@@ -43,9 +43,9 @@ class ShadowArm:
         self.max_change = max_change  # maximum change in degrees per joint per update
         self.prev_target_hand_position = self.arm.forward_kinematics()[:3, 3]
 
-        # self.kf_shoulder = KalmanFilter3D()
-        # self.kf_elbow = KalmanFilter3D()
-        # self.kf_wrist = KalmanFilter3D()
+        self.kf_shoulder = KalmanFilter3D()
+        self.kf_elbow = KalmanFilter3D()
+        self.kf_wrist = KalmanFilter3D()
 
         self.hand_closed = HAND_STATUS.OPEN
         self.hand_closed_history = []  # List to store hand positions for smoothing
@@ -159,7 +159,7 @@ class ShadowArm:
                 bool: True if the position has changed enough to require an update
                 np.ndarray: The smoothed target position
         """
-        # TODO: this is currently replacing a Kalman filter
+        # TODO: this is currently replacing a Kalman filter 
         # Apply position smoothing
         # ! We're never actually using the position history
         # self.position_history.append(target_ee_coord)
@@ -167,13 +167,13 @@ class ShadowArm:
         #     self.position_history.pop(0)
 
         # Compute EMA for smoother position
-        smoothed_position = (
-            self.position_alpha * target_ee_coord
-            + (1 - self.position_alpha) * self.prev_target_hand_position
-        )
-        # smoothed_position = target_ee_coord
+        # smoothed_position = (
+        #     self.position_alpha * target_ee_coord
+        #     + (1 - self.position_alpha) * self.prev_target_hand_position
+        # )
+        smoothed_position = target_ee_coord
 
-        # Check if the desired position is different from current position
+        # Check if the desired position is different from current ACTUAL position
         current_ee_pose_matrix = self.arm.forward_kinematics()
         actual_current_position = current_ee_pose_matrix[:3, 3]
 
@@ -181,7 +181,7 @@ class ShadowArm:
             actual_current_position, smoothed_position, atol=target_pos_tolerance
         )
 
-        # Check if the position has changed significantly from the previous position
+        # Check if the new position has changed significantly from the previously requested position
         should_update_position = (
             not np.allclose(
                 self.prev_target_hand_position,

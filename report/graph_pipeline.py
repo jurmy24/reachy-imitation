@@ -12,6 +12,14 @@ from src.models.shadow_arms_force import ShadowArm, HAND_STATUS
 from src.models.custom_ik import minimize_timer  # Import the timer
 import traceback
 
+from reachy_sdk import ReachySDK
+from src.mapping.map_to_robot_coordinates import get_scale_factors
+from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
+
+# Create the overarching Reachy instance for this application
+reachy = ReachySDK(host="192.168.100.2")
+
+
 
 class Pipeline_custom_ik_force_gripper(Pipeline):
     """Approach 1: Uses robot arm model with IK
@@ -467,3 +475,18 @@ class Pipeline_custom_ik_force_gripper(Pipeline):
                 print(f"Total iterations: {minimize_stats['total_iterations']}")
 
             self.cleanup()
+
+
+if __name__ == "__main__":
+    # Example usage
+    arm = "left"
+
+    pipeline = Pipeline_custom_ik_force_gripper(reachy)
+
+    hand_sf, elbow_sf = get_scale_factors(
+        HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
+    )
+    pipeline.hand_sf = hand_sf
+    pipeline.elbow_sf = elbow_sf
+    
+    pipeline.shadow(side=arm, display=True)

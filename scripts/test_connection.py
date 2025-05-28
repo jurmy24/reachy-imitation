@@ -139,11 +139,11 @@ if __name__ == "__main__":
     #time.sleep(0.5)
     #zero_deux_bras()
 
-    read_forces()
+    #read_forces()
 
-    # test_strong_man()
-    # time.sleep(3)
-    # zero_deux_bras()
+    test_strong_man()
+    time.sleep(3)
+    zero_deux_bras()
 
  
 
