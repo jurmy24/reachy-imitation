@@ -21,7 +21,7 @@ from reachy_sdk import ReachySDK
 from src.mapping.map_to_robot_coordinates import get_scale_factors
 from config.CONSTANTS import HUMAN_ELBOW_TO_HAND_DEFAULT, HUMAN_UPPERARM_DEFAULT
 
-from helper_kinematics import elbow_hand_forward_kinematics
+from report.helper_kinematics import elbow_hand_forward_kinematics
 
 # Create the overarching Reachy instance for this application
 reachy = ReachySDK(host="192.168.100.2")
@@ -417,7 +417,7 @@ class Pipeline_custom_ik_force_gripper(Pipeline):
                 elbow_target_coords.append(target_elbow_coord)
 
                 # Get actual robot positions via FK
-                actual_elbow, actual_hand = elbow_hand_forward_kinematics(arms_to_process[0].get_joint_array(), side="left")
+                actual_elbow, actual_hand = elbow_hand_forward_kinematics(np.deg2rad(arms_to_process[0].get_joint_array()), side="left")
                 hand_actual_coords.append(actual_hand)
                 elbow_actual_coords.append(actual_elbow)
         
@@ -606,10 +606,12 @@ if __name__ == "__main__":
     hand_target_coords, hand_actual_coords, elbow_target_coords, elbow_actual_coords = pipeline.shadow(side=arm, display=True)
 
     if hand_target_coords and hand_actual_coords:
-        plot_comparison(hand_target_coords, hand_actual_coords, "Hand")
+        #plot_comparison(hand_target_coords, hand_actual_coords, "Hand")
+        plot_separate_axes(hand_target_coords, hand_actual_coords, "hand")
 
     if elbow_target_coords and elbow_actual_coords:
-        plot_comparison(elbow_target_coords, elbow_actual_coords, "Elbow")
+        #plot_comparison(elbow_target_coords, elbow_actual_coords, "Elbow")
+        plot_separate_axes(elbow_target_coords, elbow_actual_coords, "elbow")
 
-
-
+    save_tracking_data_to_csv(hand_target_coords, hand_actual_coords, "hand", "hand_tracking_data.csv")
+    save_tracking_data_to_csv(elbow_target_coords, elbow_actual_coords, "elbow", "elbow_tracking_data.csv")

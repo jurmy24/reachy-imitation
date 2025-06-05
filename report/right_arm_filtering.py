@@ -438,18 +438,86 @@ def plot_wrist_trajectories_comparison(kalman_trajectories, ema_trajectories, ra
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
 
+def plot_wrist_y_comparison(kalman_trajectories, ema_trajectories, raw_trajectories):
+    mp_pose = mp.solutions.pose
+    wrist = mp_pose.PoseLandmark.RIGHT_WRIST
+    shoulder = mp_pose.PoseLandmark.RIGHT_SHOULDER
+
+    # Subtract shoulder position to get wrist relative to shoulder
+    kalman = np.array(kalman_trajectories[wrist]) - np.array(kalman_trajectories[shoulder])
+    ema = np.array(ema_trajectories[wrist]) - np.array(ema_trajectories[shoulder])
+    raw = np.array(raw_trajectories[wrist]) - np.array(raw_trajectories[shoulder])
+
+    # Extract Y-axis component (index 1)
+    y_kalman = kalman[:, 1]
+    y_ema = ema[:, 1]
+    y_raw = raw[:, 1]
+
+    # Plot
+    plt.figure(figsize=(12, 5))
+    plt.plot(y_raw, label='Raw', linestyle='--', alpha=0.6)
+    plt.plot(y_ema, label='EMA', linestyle='-.', alpha=0.8)
+    plt.plot(y_kalman, label='Kalman', linewidth=2)
+
+    plt.title("Right Wrist Y-Position (in Shoulder Frame) Over Time")
+    plt.xlabel("Frame")
+    plt.ylabel("Y Position (m)")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+def plot_wrist_y_comparison_fancy(kalman_trajectories, ema_trajectories, raw_trajectories, save_path='wrist_y_plot_dark.png'):
+    mp_pose = mp.solutions.pose
+    wrist = mp_pose.PoseLandmark.RIGHT_WRIST
+    shoulder = mp_pose.PoseLandmark.RIGHT_SHOULDER
+
+    # Compute relative wrist position to shoulder
+    kalman = np.array(kalman_trajectories[wrist]) - np.array(kalman_trajectories[shoulder])
+    ema = np.array(ema_trajectories[wrist]) - np.array(ema_trajectories[shoulder])
+    raw = np.array(raw_trajectories[wrist]) - np.array(raw_trajectories[shoulder])
+
+    # Extract Y-axis component (index 1)
+    y_kalman = kalman[:, 1]
+    y_ema = ema[:, 1]
+    y_raw = raw[:, 1]
+
+    # Set up dark plot
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor='black')
+    ax.set_facecolor('black')
+    ax.tick_params(colors='white')
+    ax.spines[:].set_color('white')
+
+    # Grid and lines
+    ax.grid(True, linestyle=':', color='white', alpha=0.3)
+    ax.plot(y_raw, label='Raw', linestyle='--', color='white', alpha=0.6, linewidth=2)
+    ax.plot(y_ema, label='EMA', linestyle='-.', color='#1f77b4', linewidth=2)
+    ax.plot(y_kalman, label='Kalman', linestyle='-', color='#ff7f0e', linewidth=2)
+
+    # Labels and title
+    #ax.set_title("Right Wrist Y-Position (in Shoulder Frame) Over Time", fontsize=16, weight='bold', color='white')
+    ax.set_xlabel("Frame", fontsize=16, color='white')
+    ax.set_ylabel("Y Position (m)", fontsize=16, color='white', weight='bold')
+    ax.legend(loc='upper right', fontsize=18, facecolor='black', labelcolor='white', frameon=False)
+
+    # Save and show
+    plt.tight_layout()
+    fig.savefig(save_path, dpi=300, transparent=True, bbox_inches='tight')
+    plt.show()
+
 
 def main():
     """Run right arm robot visualization demo witqh mediapipe"""
     # Run animated visualization
     kalman_trajectories, ema_trajectories, raw_trajectories = record_arm()
-    animation, fig_anim = visualize_human_arm(kalman_trajectories)
+    #animation, fig_anim = visualize_human_arm(kalman_trajectories)
     #plt.show()
 
     #plot_wrist_trajectories_comparison(kalman_trajectories, ema_trajectories, raw_trajectories)
-    
+    plot_wrist_y_comparison_fancy(kalman_trajectories, ema_trajectories, raw_trajectories)
     # Uncomment to save animation
-    animation.save('robot_animation.gif', writer='pillow', dpi=100)
+    #animation.save('robot_animation.gif', writer='pillow', dpi=100)
+
 
 
 if __name__ == "__main__":
