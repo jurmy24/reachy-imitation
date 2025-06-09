@@ -29,7 +29,8 @@ The `src/` folder contains the code that allows us to teleoperate the Reachy 1 r
 
 The teleoperation setup consists of a human operator, the Reachy 1 robot, a Realsense D435i camera, and a computer connected via ethernet to Reachy and via usb to the camera.
 
-ADD IMAGE HERE OF THE SETUP
+<img width="934" alt="Screenshot 2025-06-09 at 15 35 41" src="https://github.com/user-attachments/assets/98f998f4-773f-4e95-ac4b-aa06f105a252" />
+
 
 ### How to setup coding environment
 
