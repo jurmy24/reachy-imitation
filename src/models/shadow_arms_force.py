@@ -9,13 +9,21 @@ from statistics import mode
 from src.models.kalmann import KalmanFilter3D
 from enum import Enum
 
+
 class HAND_STATUS(Enum):
+    """Enum representing the state of the robot's hand/gripper"""
+
     CLOSED = 1
     CLOSING = 2
-    OPEN = 3 
+    OPEN = 3
+
 
 class ShadowArm:
-    """Base class for robot arm operations and tracking"""
+    """Class for controlling and tracking a Reachy robot arm.
+
+    Handles arm movement, hand state tracking, and force-based gripper control.
+    Uses Kalman filtering for smooth motion and MediaPipe for pose estimation.
+    """
 
     def __init__(
         self,
@@ -27,6 +35,7 @@ class ShadowArm:
         max_change,
         mp_pose,
     ):
+        # Core robot components
         self.reachy = reachy
         self.arm = reachy_arm
         self.side: Literal["right", "left"] = side
@@ -34,7 +43,7 @@ class ShadowArm:
         self.mp_pose = mp_pose
         self.landmark_indices = self.get_landmark_indices()
 
-        # Movement tracking
+        # Movement tracking and smoothing
         self.joint_array = self.get_joint_array()
         self.joint_dict = {}
         self.position_history = []
@@ -43,25 +52,22 @@ class ShadowArm:
         self.max_change = max_change  # maximum change in degrees per joint per update
         self.prev_target_hand_position = self.arm.forward_kinematics()[:3, 3]
 
+        # Kalman filters for position smoothing
         self.kf_shoulder = KalmanFilter3D()
         self.kf_elbow = KalmanFilter3D()
         self.kf_wrist = KalmanFilter3D()
 
+        # Hand state tracking
         self.hand_closed = HAND_STATUS.OPEN
-        self.hand_closed_history = []  # List to store hand positions for smoothing
+        self.hand_closed_history = []
         self._hand_history_size = 3
 
-        # Force gripper
-        # ! These values are arbitrary and should be tuned by testing with Reachy
-        # self.force_max_tolerance = -70 if self.side == "right" else 70
-        # self.force_min_tolerance = -40 if self.side == "right" else 40
-
+        # Force gripper configuration
         self.force_max_tolerance = 0
-        self.force_min_tolerance = 2000000 #f self.side == "right" else 2000000
+        self.force_min_tolerance = 2000000
         self.gripper_movement_threshold = 5 if side == "right" else -5
         self.open_gripper_value = -60 if self.side == "right" else 60
         self.closed_gripper_value = 12 if self.side == "right" else -12
-
 
     def get_landmark_indices(self):
         """Return MediaPipe landmark indices for this arm
@@ -149,39 +155,30 @@ class ShadowArm:
         target_pos_tolerance: float = 0.03,
         movement_min_tolerance: float = 0.02,
     ) -> Tuple[bool, np.ndarray]:
-        """Process a new target end effector position and determine if movement is needed
+        """Process a new target end effector position and determine if movement is needed.
 
         Args:
-            target_ee_coord: The target hand position in Reachy's coordinate system
+            target_ee_coord: Target hand position in Reachy's coordinate system
+            target_pos_tolerance: Maximum allowed distance from target position
+            movement_min_tolerance: Minimum movement required to trigger an update
 
         Returns:
             Tuple containing:
-                bool: True if the position has changed enough to require an update
+                bool: True if position has changed enough to require an update
                 np.ndarray: The smoothed target position
         """
-        # TODO: this is currently replacing a Kalman filter 
-        # Apply position smoothing
-        # ! We're never actually using the position history
-        # self.position_history.append(target_ee_coord)
-        # if len(self.position_history) > self.smoothing_buffer_size:
-        #     self.position_history.pop(0)
-
-        # Compute EMA for smoother position
-        # smoothed_position = (
-        #     self.position_alpha * target_ee_coord
-        #     + (1 - self.position_alpha) * self.prev_target_hand_position
-        # )
         smoothed_position = target_ee_coord
 
-        # Check if the desired position is different from current ACTUAL position
+        # Get current end effector position
         current_ee_pose_matrix = self.arm.forward_kinematics()
         actual_current_position = current_ee_pose_matrix[:3, 3]
 
+        # Check if we're already at the target position
         already_at_position = np.allclose(
             actual_current_position, smoothed_position, atol=target_pos_tolerance
         )
 
-        # Check if the new position has changed significantly from the previously requested position
+        # Check if new position is significantly different from previous target
         should_update_position = (
             not np.allclose(
                 self.prev_target_hand_position,
@@ -191,11 +188,9 @@ class ShadowArm:
             and not already_at_position
         )
 
-        # Update previous position if we're going to move
         if should_update_position:
             self.prev_target_hand_position = smoothed_position
 
-        # ! We're always updating now and never skipping
         return should_update_position, smoothed_position
 
     def calculate_joint_positions(self, target_position: np.ndarray) -> bool:
@@ -311,11 +306,12 @@ class ShadowArm:
         if len(self.hand_closed_history) > self._hand_history_size:
             self.hand_closed_history.pop(0)
 
-        if mode(self.hand_closed_history) is True: #this should never return HAND_STATUS.CLOSING
+        if (
+            mode(self.hand_closed_history) is True
+        ):  # this should never return HAND_STATUS.CLOSING
             return HAND_STATUS.CLOSED
         else:
-            return HAND_STATUS.OPEN 
-            
+            return HAND_STATUS.OPEN
 
     def _is_hand_closed(self, hand_landmarks, mp_hands):
         palm_base = hand_landmarks.landmark[0]
@@ -355,14 +351,24 @@ class ShadowArm:
             return self.reachy.force_sensors.l_force_gripper.force
 
     def close_hand(self):
-        """Close the gripper using force feedback"""
+        """Close the gripper using force feedback control.
+
+        Uses force sensor readings to determine when to stop closing
+        to prevent damage to the gripper or grasped object.
+        """
         current_force = self.get_force_reading()
         print("FORCE READING: ", current_force)
+
+        # Initialize gripper position if not set
         if self.joint_dict.get(f"{self.prefix}gripper") is None:
-            self.joint_dict[f"{self.prefix}gripper"] = getattr(getattr(self.arm, f"{self.prefix}gripper"), "present_position")
-        # If current force is between the max and min tolerance, don't move the gripper
-        
-        if (self.side == "right" and current_force > 0) or (self.side == "left" and current_force < 0): #too much power! reachy must be stopped
+            self.joint_dict[f"{self.prefix}gripper"] = getattr(
+                getattr(self.arm, f"{self.prefix}gripper"), "present_position"
+            )
+
+        # Handle force-based gripper control
+        if (self.side == "right" and current_force > 0) or (
+            self.side == "left" and current_force < 0
+        ):  # Too much force - stop closing
             value = (
                 self.joint_dict[f"{self.prefix}gripper"]
                 - self.gripper_movement_threshold
@@ -371,29 +377,27 @@ class ShadowArm:
 
         elif abs(current_force) <= self.force_min_tolerance and abs(
             current_force
-        ) >= abs(self.force_max_tolerance): #i.e. in the sweet spot 
-            #value = 0
+        ) >= abs(
+            self.force_max_tolerance
+        ):  # Force in acceptable range - maintain position
             value = self.joint_dict[f"{self.prefix}gripper"]
             self.hand_closed = HAND_STATUS.CLOSED
 
-        else: # abs(current_force) < abs(self.force_min_tolerance): # Too little power! reachy must be stronger
+        else:  # Too little force - continue closing
             value = (
                 self.joint_dict[f"{self.prefix}gripper"]
                 + self.gripper_movement_threshold
             )
             self.hand_closed = HAND_STATUS.CLOSING
-            if self.side == "right": # don't want to over do it :)
+            # Apply limits to prevent over-closing
+            if self.side == "right":
                 value = min(value, self.closed_gripper_value)
             else:
                 value = max(value, self.closed_gripper_value)
-        # else:
-        #     print(
-        #         f"Warning: Force reading out of range on {self.side} gripper: {current_force:.1f}g"
-        #     )
 
-        # value = 10 if self.side == "right" else -10
         self.joint_dict[f"{self.prefix}gripper"] = value
 
     def open_hand(self):
+        """Open the gripper to its maximum open position."""
         self.hand_closed = HAND_STATUS.OPEN
         self.joint_dict[f"{self.prefix}gripper"] = self.open_gripper_value

@@ -6,10 +6,14 @@ from src.utils.three_d import get_3D_coordinates, get_3D_coordinates_of_hand
 from src.models.custom_ik import inverse_kinematics_fixed_wrist
 from config.CONSTANTS import get_finger_tips
 from statistics import mode
-from src.models.kalmann import KalmanFilter3D
+
 
 class ShadowArm:
-    """Base class for robot arm operations and tracking"""
+    """Base class for robot arm operations and tracking.
+
+    Handles arm movement, hand state tracking, and basic gripper control.
+    Uses MediaPipe for pose estimation and provides inverse kinematics capabilities.
+    """
 
     def __init__(
         self,
@@ -20,13 +24,14 @@ class ShadowArm:
         max_change,
         mp_pose,
     ):
+        # Core robot components
         self.arm = reachy_arm
         self.side: Literal["right", "left"] = side
         self.prefix = f"{side[0]}_"  # "r_" or "l_"
         self.mp_pose = mp_pose
         self.landmark_indices = self.get_landmark_indices()
 
-        # Movement tracking
+        # Movement tracking and smoothing
         self.joint_array = self.get_joint_array()
         self.joint_dict = {}
         self.position_history = []
@@ -35,19 +40,16 @@ class ShadowArm:
         self.max_change = max_change  # maximum change in degrees per joint per update
         self.prev_target_hand_position = self.arm.forward_kinematics()[:3, 3]
 
-        # self.kf_shoulder = KalmanFilter3D()
-        # self.kf_elbow = KalmanFilter3D()
-        # self.kf_wrist = KalmanFilter3D()
-        
+        # Hand state tracking
         self.hand_closed = False
-        self.hand_closed_history = []  # List to store hand positions for smoothing
-        self._hand_history_size = 3 
+        self.hand_closed_history = []
+        self._hand_history_size = 3
 
     def get_landmark_indices(self):
-        """Return MediaPipe landmark indices for this arm
+        """Return MediaPipe landmark indices for this arm.
 
         Returns:
-            Dictionary mapping landmark names to MediaPipe indices
+            dict: Dictionary mapping landmark names to MediaPipe indices
         """
         if self.side == "right":
             return {
@@ -65,7 +67,18 @@ class ShadowArm:
             }
 
     def get_coordinates(self, landmarks_data, depth_frame, w, h, intrinsics):
-        """Get 3D coordinates for this arm"""
+        """Get 3D coordinates for this arm's key points.
+
+        Args:
+            landmarks_data: MediaPipe pose landmarks data
+            depth_frame: Depth camera frame
+            w: Frame width
+            h: Frame height
+            intrinsics: Camera intrinsics matrix
+
+        Returns:
+            tuple: (shoulder_coords, elbow_coords, hand_coords)
+        """
         shoulder = get_3D_coordinates(
             landmarks_data[self.landmark_indices["shoulder"]],
             depth_frame,
@@ -90,16 +103,8 @@ class ShadowArm:
         )
         return shoulder, elbow, hand
 
-    def apply_kalman_filter_to_coordinates(self, shoulder, elbow, hand):
-        """Apply Kalman filter to the coordinates of the arm"""
-        shoulder = self.kf_shoulder.update(shoulder)
-        elbow = self.kf_elbow.update(elbow)
-        hand = self.kf_wrist.update(hand)
-
-        return shoulder, elbow, hand
-
     def get_joint_array(self) -> np.ndarray:
-        """Get current joint positions as a numpy array
+        """Get current joint positions as a numpy array.
 
         Returns:
             np.ndarray: Array of current joint positions (excluding gripper)
@@ -129,58 +134,53 @@ class ShadowArm:
         target_pos_tolerance: float = 0.03,
         movement_min_tolerance: float = 0.02,
     ) -> Tuple[bool, np.ndarray]:
-        """Process a new target end effector position and determine if movement is needed
+        """Process a new target end effector position and determine if movement is needed.
 
         Args:
-            target_ee_coord: The target hand position in Reachy's coordinate system
+            target_ee_coord: Target hand position in Reachy's coordinate system
+            target_pos_tolerance: Maximum allowed distance from target position
+            movement_min_tolerance: Minimum movement required to trigger an update
 
         Returns:
             Tuple containing:
-                bool: True if the position has changed enough to require an update
+                bool: True if position has changed enough to require an update
                 np.ndarray: The smoothed target position
         """
-        # TODO: this is currently replacing a Kalman filter
-        # Apply position smoothing
-        # ! We're never actually using the position history
-        # self.position_history.append(target_ee_coord)
-        # if len(self.position_history) > self.smoothing_buffer_size:
-        #     self.position_history.pop(0)
-
-        # Compute EMA for smoother position
+        # Apply exponential moving average smoothing
         smoothed_position = (
             self.position_alpha * target_ee_coord
             + (1 - self.position_alpha) * self.prev_target_hand_position
         )
-        #smoothed_position = target_ee_coord 
 
-        # Check if the desired position is different from current position
+        # Get current end effector position
         current_ee_pose_matrix = self.arm.forward_kinematics()
         actual_current_position = current_ee_pose_matrix[:3, 3]
-        
+
+        # Check if we're already at the target position
         already_at_position = np.allclose(
             actual_current_position, smoothed_position, atol=target_pos_tolerance
         )
 
-        # Check if the position has changed significantly from the previous position
+        # Check if new position is significantly different from previous target
         should_update_position = (
             not np.allclose(
-                self.prev_target_hand_position, smoothed_position, atol=movement_min_tolerance
+                self.prev_target_hand_position,
+                smoothed_position,
+                atol=movement_min_tolerance,
             )
             and not already_at_position
         )
 
-        # Update previous position if we're going to move
         if should_update_position:
             self.prev_target_hand_position = smoothed_position
 
-        # ! We're always updating now and never skipping
         return should_update_position, smoothed_position
 
     def calculate_joint_positions(self, target_position: np.ndarray) -> bool:
-        """Calculate new joint positions using inverse kinematics
+        """Calculate new joint positions using inverse kinematics.
 
         Args:
-            target_position: The target hand position
+            target_position: Target hand position
 
         Returns:
             bool: True if calculation was successful
@@ -189,7 +189,6 @@ class ShadowArm:
             # Get the current transformation matrix
             transform_matrix = self.arm.forward_kinematics()
 
-            # ! The fact that we're leaving the orientation unchanged might give strange results
             # Set the target position in the transformation matrix
             transform_matrix[:3, 3] = target_position
 
@@ -211,15 +210,11 @@ class ShadowArm:
 
             # Apply rate limiting and update joint dictionary
             for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
-                # Apply rate limiting
                 limited_change = np.clip(
                     value - self.joint_array[i], -self.max_change, self.max_change
                 )
                 self.joint_array[i] += limited_change
                 self.joint_dict[name] = self.joint_array[i]
-
-            # Handle gripper separately - maintain closed
-            # self.joint_dict[f"{self.prefix}gripper"] = 0
 
             return True
         except Exception as e:
@@ -232,18 +227,18 @@ class ShadowArm:
         target_elbow_position: np.ndarray,
         elbow_weight: float,
     ) -> bool:
-        """Calculate new joint positions using inverse kinematics
+        """Calculate new joint positions using custom inverse kinematics.
 
         Args:
-            target_ee_position: The target hand position
-            target_elbow_position: The target elbow position
-            elbow_weight: The weight of the elbow in the IK calculation
+            target_ee_position: Target hand position
+            target_elbow_position: Target elbow position
+            elbow_weight: Weight of the elbow in the IK calculation
 
         Returns:
             bool: True if calculation was successful
         """
         try:
-            # Compute IK
+            # Compute IK with custom solver
             joint_pos = inverse_kinematics_fixed_wrist(
                 ee_coords=target_ee_position,
                 elbow_coords=target_elbow_position,
@@ -267,37 +262,49 @@ class ShadowArm:
 
             # Apply rate limiting and update joint dictionary
             for i, (name, value) in enumerate(zip(joint_names, joint_pos)):
-                # Apply rate limiting
                 limited_change = np.clip(
                     value - self.joint_array[i], -self.max_change, self.max_change
                 )
                 self.joint_array[i] += limited_change
                 self.joint_dict[name] = self.joint_array[i]
 
-            # Handle gripper separately - maintain closed
-            #self.joint_dict[f"{self.prefix}gripper"] = 0
-
             return True
         except Exception as e:
             print(f"{self.side.capitalize()} arm IK calculation error: {e}")
             return False
 
-
     def get_hand_closedness(self, hand_landmarks, mp_hands, conservative=True):
+        """Determine if the hand is closed based on finger positions.
+
+        Args:
+            hand_landmarks: MediaPipe hand landmarks
+            mp_hands: MediaPipe hands object
+            conservative: If True, uses less strict criteria for hand closure
+
+        Returns:
+            bool: True if hand is considered closed
+        """
         if conservative:
             is_new_landmark_closed = self._is_hand_half_closed(hand_landmarks, mp_hands)
         else:
             is_new_landmark_closed = self._is_hand_closed(hand_landmarks, mp_hands)
-        
+
         self.hand_closed_history.append(is_new_landmark_closed)
         if len(self.hand_closed_history) > self._hand_history_size:
             self.hand_closed_history.pop(0)
-        
-        return mode(self.hand_closed_history)  # Return the most common value in the history
 
-
+        return mode(self.hand_closed_history)
 
     def _is_hand_closed(self, hand_landmarks, mp_hands):
+        """Check if hand is fully closed based on finger positions.
+
+        Args:
+            hand_landmarks: MediaPipe hand landmarks
+            mp_hands: MediaPipe hands object
+
+        Returns:
+            bool: True if hand is closed
+        """
         palm_base = hand_landmarks.landmark[0]
         open_fingers = 0
         for tip in get_finger_tips(mp_hands):
@@ -306,29 +313,33 @@ class ShadowArm:
             ) > calculate_2D_distance(hand_landmarks.landmark[tip - 3], palm_base):
                 open_fingers += 1
         return open_fingers <= 2
-    
 
     def _is_hand_half_closed(self, hand_landmarks, mp_hands):
-        """
-        Can be used as a less conservative version of is_hand_closed
+        """Check if hand is partially closed based on finger positions.
+
+        Args:
+            hand_landmarks: MediaPipe hand landmarks
+            mp_hands: MediaPipe hands object
+
+        Returns:
+            bool: True if at least 3 fingers are partially closed
         """
         palm_base = hand_landmarks.landmark[0]
         half_closed_fingers = 0
         for tip in get_finger_tips(mp_hands):
             tip_to_palm = calculate_2D_distance(hand_landmarks.landmark[tip], palm_base)
-            if tip_to_palm < (calculate_2D_distance(hand_landmarks.landmark[tip - 2], palm_base)):
+            if tip_to_palm < (
+                calculate_2D_distance(hand_landmarks.landmark[tip - 2], palm_base)
+            ):
                 half_closed_fingers += 1
-        return (
-            half_closed_fingers >= 3
-        )  # Considérer la main entreouverte si au moins 3 doigts sont entreouverts
-
-    
-
+        return half_closed_fingers >= 3
 
     def close_hand(self):
-        value = 10 if self.side == "right" else -10 
+        """Close the gripper to a fixed position."""
+        value = 10 if self.side == "right" else -10
         self.joint_dict[f"{self.prefix}gripper"] = value
 
     def open_hand(self):
+        """Open the gripper to its maximum open position."""
         value = -60 if self.side == "right" else 60
         self.joint_dict[f"{self.prefix}gripper"] = value
