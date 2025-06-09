@@ -21,9 +21,9 @@ def collect_joint_data(duration=3.0, sampling_rate=0.1):
         sampling_rate: Time between samples in seconds
     """
     # Create data directory if it doesn't exist
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
     os.makedirs(data_dir, exist_ok=True)
-    
+
     # Create CSV filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = os.path.join(data_dir, f"joint_data_{timestamp}.csv")
